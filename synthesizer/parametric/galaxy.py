@@ -17,13 +17,24 @@ from ..plt import single_histxy, mlabel
 from ..stats import weighted_median, weighted_mean
 
 
-class SEDGenerator():
+class GenericGenerator:
+
+    """ methods common to both SEDGenerator and LineGenerator """
+
+    def get_Q(self):
+        """ return the ionising photon luminosity (log10Q) for a given SFZH. """
+
+        return np.sum(10**self.grid.log10Q * self.sfzh, axis=(0, 1))
+
+
+class SEDGenerator(GenericGenerator):
 
     def __init__(self, grid, SFZH):
 
         self.grid = grid
         # add an extra dimension to the sfzh to allow the fast summation
-        self.sfzh = np.expand_dims(SFZH.sfzh, axis=2)
+        self.sfzh = SFZH.sfzh
+        self.sfzh_ = np.expand_dims(self.sfzh, axis=2)
 
         self.lam = self.grid.lam
         self.log10lam = np.log10(self.grid.lam)
@@ -33,7 +44,7 @@ class SEDGenerator():
         # --- calculate stellar SED
         self.spectra['stellar'] = Sed(self.lam)  # pure stellar emission
         self.spectra['stellar'].lnu = np.sum(
-            self.grid.spectra['stellar'] * self.sfzh, axis=(0, 1))  # calculate pure stellar emission
+            self.grid.spectra['stellar'] * self.sfzh_, axis=(0, 1))  # calculate pure stellar emission
 
         self.spectra['intrinsic'] = Sed(self.lam)  # nebular + stellar (but no dust)
         self.spectra['attenuated'] = Sed(self.lam)  # nebular + stellar (but no dust)
@@ -44,7 +55,7 @@ class SEDGenerator():
         """ in the simple screen model all starlight is equally affected by a screen of gas and dust. By definition fesc = 0.0. """
 
         self.spectra['intrinsic'].lnu = np.sum(
-            self.grid.spectra['total'] * self.sfzh, axis=(0, 1))  # -- stellar transmitted + nebular
+            self.grid.spectra['total'] * self.sfzh_, axis=(0, 1))  # -- stellar transmitted + nebular
 
         if tauV:
             tau = tauV * getattr(dust_curves, dust_curve)(params=dust_parameters).tau(self.lam)
@@ -73,19 +84,19 @@ class SEDGenerator():
             # if Lyman-alpha escape fraction is specified reduce LyA luminosity
 
             # --- generate contribution of line emission alone and reduce the contribution of Lyman-alpha
-            linecont = np.sum(self.grid.spectra['linecont'] * self.sfzh, axis=(0, 1))
+            linecont = np.sum(self.grid.spectra['linecont'] * self.sfzh_, axis=(0, 1))
             idx = self.grid.get_nearest_index(1216., self.grid.lam)  # get index of Lyman-alpha
             linecont[idx] *= fesc_LyA  # reduce the contribution of Lyman-alpha
 
             nebular_continuum = np.sum(
-                self.grid.spectra['nebular_continuum'] * self.sfzh, axis=(0, 1))
-            transmitted = np.sum(self.grid.spectra['transmitted'] * self.sfzh, axis=(0, 1))
+                self.grid.spectra['nebular_continuum'] * self.sfzh_, axis=(0, 1))
+            transmitted = np.sum(self.grid.spectra['transmitted'] * self.sfzh_, axis=(0, 1))
             self.spectra['reprocessed'].lnu = (
                 1.-fesc) * (linecont + nebular_continuum + transmitted)
 
         else:
             self.spectra['reprocessed'].lnu = (
-                1.-fesc) * np.sum(self.grid.spectra['total'] * self.sfzh, axis=(0, 1))
+                1.-fesc) * np.sum(self.grid.spectra['total'] * self.sfzh_, axis=(0, 1))
 
         self.spectra['intrinsic'].lnu = self.spectra['escape'].lnu + \
             self.spectra['reprocessed'].lnu  # the light before reprocessing by dust
@@ -197,7 +208,7 @@ class SEDGenerator():
         return fig, ax
 
 
-class LineGenerator:
+class LineGenerator(GenericGenerator):
 
     """ Used to generate quantities for lines """
 
@@ -221,6 +232,7 @@ class LineGenerator:
 
         for line_id_ in line_id:
             line = self.lines[line_id_]
+
             wv.append(line.attrs['wavelength'])  # \AA
 
             line_luminosity += np.sum(line['luminosity'] * self.sfzh, axis=(0, 1))
@@ -237,92 +249,3 @@ class LineGenerator:
 # def rebin_SFZH(sfzh, new_log10ages, new_metallicities):
 #
 #     """ take a BinnedSFZH object and rebin it on to a new grid. The context is taking a binned SFZH from e.g. a SAM and mapping it on to a new grid e.g. from a particular SPS model """
-
-
-class BinnedSFZH:
-
-    """ this is a simple class for holding a binned star formation and metal enrichment history. This can be extended with other methods. """
-
-    def __init__(self, log10ages, metallicities, sfzh, sfh_f=None, Zh_f=None):
-        self.log10ages = log10ages
-        self.ages = 10**log10ages
-        self.log10ages_lims = [self.log10ages[0], self.log10ages[-1]]
-        self.metallicities = metallicities
-        self.metallicities_lims = [self.metallicities[0], self.metallicities[-1]]
-        self.log10metallicities = np.log10(metallicities)
-        self.log10metallicities_lims = [self.log10metallicities[0], self.log10metallicities[-1]]
-        self.sfzh = sfzh  # 2D star formation and metal enrichment history
-        self.sfh = np.sum(self.sfzh, axis=1)  # 1D star formation history
-        self.Z = np.sum(self.sfzh, axis=0)  # metallicity distribution
-        self.sfh_f = sfh_f  # function used to generate the star formation history if given
-        self.Zh_f = Zh_f  # function used to generate the metallicity history/distribution if given
-
-        # --- check if metallicities on regular grid in log10metallicity or metallicity or not at all (e.g. BPASS
-        if len(set(self.metallicities[:-1]-self.metallicities[1:])) == 1:
-            self.metallicity_grid = 'Z'
-        elif len(set(self.log10metallicities[:-1]-self.log10metallicities[1:])) == 1:
-            self.metallicity_grid = 'log10Z'
-        else:
-            self.metallicity_grid = None
-
-    def calculate_median_age(self):
-        """ calculate the median age """
-
-        return weighted_median(self.ages, self.sfh) * yr
-
-    def calculate_mean_age(self):
-        """ calculate the mean age """
-
-        return weighted_mean(self.ages, self.sfh) * yr
-
-    def calculate_mean_metallicity(self):
-        """ calculate the mean metallicity """
-
-        return weighted_mean(self.metallicities, self.Z)
-
-    def summary(self):
-        """ print basic summary of the binned star formation and metal enrichment history """
-
-        print('-'*10)
-        print('SUMMARY OF BINNED SFZH')
-        print(f'median age: {self.calculate_median_age().to("Myr"):.2f}')
-        print(f'mean age: {self.calculate_mean_age().to("Myr"):.2f}')
-        print(f'mean metallicity: {self.calculate_mean_metallicity():.4f}')
-
-    def plot(self, show=True):
-        """ Make a nice plots of the binned SZFH """
-
-        fig, ax, haxx, haxy = single_histxy()
-
-        # this is technically incorrect because metallicity is not on a an actual grid.
-        ax.imshow(self.sfzh.T, origin='lower', extent=[
-                  *self.log10ages_lims, self.log10metallicities[0], self.log10metallicities[-1]], cmap=cmr.sunburst, aspect='auto')
-
-        # --- add binned Z to right of the plot
-        # haxx.step(log10ages, sfh, where='mid', color='k')
-        haxy.fill_betweenx(self.log10metallicities, self.Z/np.max(self.Z),
-                           step='mid', color='k', alpha=0.3)
-
-        # --- add binned SFH to top of the plot
-        # haxx.step(log10ages, sfh, where='mid', color='k')
-        haxx.fill_between(self.log10ages, self.sfh/np.max(self.sfh),
-                          step='mid', color='k', alpha=0.3)
-
-        # --- add SFR to top of the plot
-        if self.sfh_f:
-            x = np.linspace(*self.log10ages_lims, 1000)
-            y = self.sfh_f.sfr(10**x)
-            haxx.plot(x, y/np.max(y))
-
-        haxy.set_xlim([0., 1.2])
-        haxy.set_ylim(self.log10metallicities_lims)
-        haxx.set_ylim([0., 1.2])
-        haxx.set_xlim(self.log10ages_lims)
-
-        ax.set_xlabel(mlabel('log_{10}(age/yr)'))
-        ax.set_ylabel(mlabel('log_{10}Z'))
-
-        if show:
-            plt.show()
-
-        return fig, ax
