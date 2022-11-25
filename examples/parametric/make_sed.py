@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 
 from synthesizer.filters import SVOFilterCollection
 from synthesizer.grid import SpectralGrid
-from synthesizer.binned.sfzh import SFH, ZH, generate_sfzh
-from synthesizer.binned.galaxy import SEDGenerator
+from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
+from synthesizer.parametric.galaxy import SEDGenerator
 from synthesizer.plt import single, single_histxy, mlabel
 from unyt import yr, Myr
 from synthesizer.igm import Madau96, Inoue14

@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import cmasher as cmr
 from unyt import yr, Myr
 
-from synthesizer.binned.sfzh import SFH, ZH, generate_sfzh
+from synthesizer.parametric.sfzh import SFH, ZH, generate_sfzh
 from synthesizer.plt import single, single_histxy, mlabel
 
 

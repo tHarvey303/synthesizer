@@ -266,7 +266,7 @@ class SFH:
         def __init__(self, parameters):
             self.name = 'Exponential'
             self.parameters = parameters
-            self.tau, = self.parameters['tau'].to('yr').value
+            self.tau = self.parameters['tau'].to('yr').value
 
         def sfr_(self, age):
 
@@ -282,7 +282,11 @@ class SFH:
             self.name = 'Truncated Exponential'
             self.parameters = parameters
             self.tau = self.parameters['tau'].to('yr').value
-            self.max_age = self.parameters['max_age'].to('yr').value
+
+            if 'max_age' in self.parameters:
+                self.max_age = self.parameters['max_age'].to('yr').value
+            else:
+                self.max_age = self.parameters['duration'].to('yr').value
 
         def sfr_(self, age):
 
