@@ -1,30 +1,55 @@
 """
-Read BC03 ASCII files in to a single numpy array (age, Z, lambda)
-
-adapted from...
-
-https://bitbucket.org/rteyssie/ramses/src/ea56da02dc3c52ba2b92650a14c206a1547aee52/trunk/ramses/utils/py/sed_utils.py
-
+Download BC03 and convert to HDF5 synthesizer grid.
 """
 
 import numpy as np
 import os
 import sys
 import re
+import wget
+import argparse
+from utils import write_data_h5py, write_attribute
+import tarfile
 import glob
+import gzip
+import shutil
 
-from astropy.cosmology import Planck13 as cosmo
-from astropy.cosmology import z_at_value
-import astropy.units as u
+from synthesizer.sed import calculate_Q
 
-from _utils import write_data_h5py
+def download_data():
 
-# TODO: read in latest bc03-2016 *binary* files
-# example: https://github.com/cmancone/easyGalaxy/blob/0608b17d84d00c2bdc069ebfb83024bf8d15e309/ezgal/utils.py#L382
+    url = ("http://www.bruzual.org/bc03/Original_version_2003/"
+            "bc03.models.padova_2000_chabrier_imf.tar.gz")
+
+    filename = wget.download(url)
+    return filename
+
+
+def untar_data(synthesizer_data_dir):
+
+    input_dir = f'{synthesizer_data_dir}/input_files/'
+    fn = 'bc03.models.padova_2000_chabrier_imf.tar.gz'
+
+    # --- untar main directory
+    tar = tarfile.open(fn)
+    tar.extractall(path=input_dir)
+    tar.close()
+    os.remove(fn)
+
+    # --- unzip the individual files that need reading
+    model_dir = (f"{synthesizer_data_dir}/input_files/bc03/"
+                "models/Padova2000/chabrier")
+
+    files = glob.glob(f'{model_dir}/bc2003_hr_m*_chab_ssp.ised_ASCII.gz')
+
+    for file in files:
+        with gzip.open(file, 'rb') as f_in:
+            with open('.'.join(file.split('.')[:-1]), 'wb') as f_out:
+                shutil.copyfileobj(f_in, f_out)
 
 
 def readBC03Array(file, lastLineFloat=None):
-    """Read a record from bc03 ascii file. The record starts with the 
+    """Read a record from bc03 ascii file. The record starts with the
        number of elements N and is followed by N numbers. The record may
        or may not start within a line, i.e. a line need not necessarily
        start with a record.
@@ -36,24 +61,25 @@ def readBC03Array(file, lastLineFloat=None):
     Returns array, lastLine, where:
     ----------------------------------------------------------------------
     array = The array values read from the file
-    lastLine = The remainder of the last line read (in floating format), 
+    lastLine = The remainder of the last line read (in floating format),
                for continued reading of the file
     """
-    if lastLineFloat == None or len(lastLineFloat) == 0:
+
+    if lastLineFloat is None or len(lastLineFloat) == 0:
         # Nothing in last line, so read next line
         line = file.readline()
         lineStr = line.split()
         lastLineFloat = [float(x) for x in lineStr]
     # Read array 'header' (i.e. number of elements)
-    arrayCount = int(lastLineFloat[0])          # Length of returned array
-    array = np.empty(arrayCount)  # Initialise the array
+    arrayCount = int(lastLineFloat[0])    # Length of returned array
+    array = np.empty(arrayCount)          # Initialise the array
     lastLineFloat = lastLineFloat[1:len(lastLineFloat)]
-    iA = 0  # Running array index
-    while True:  # Read numbers until array is full
+    iA = 0                                # Running array index
+    while True:                           # Read numbers until array is full
         for iL in range(0, len(lastLineFloat)):  # Loop numbers in line
             array[iA] = lastLineFloat[iL]
             iA = iA+1
-            if iA >= arrayCount:  # Array is full so return
+            if iA >= arrayCount:                # Array is full so return
                 return array, lastLineFloat[iL+1:]
         line = file.readline()   # Went through the line so get the next one
         lineStr = line.split()
@@ -65,12 +91,12 @@ def convertBC03(files=None):
 
     Parameters (user will be prompted for those if not present):
     ----------------------------------------------------------------------
-    files: list of each BC03 SED ascii file, typically named 
+    files: list of each BC03 SED ascii file, typically named
            bc2003_xr_mxx_xxxx_ssp.ised_ASCII
     """
 
     # Prompt user for files if not provided--------------------
-    if files == None:
+    if files is None:
         print('Please write the model to read',)
         files = []
         while True:
@@ -94,6 +120,8 @@ def convertBC03(files=None):
     for iFile, fileName in enumerate(files):
         print('Converting file ', fileName)
         file = open(fileName, 'r')
+        # file = gzip.open(f'{fileName}.gz', 'rb')
+
         ages, lastLine = readBC03Array(file)  # Read age bins
         nAge = len(ages)
         print("Number of ages: %s" % nAge)
@@ -136,7 +164,7 @@ def convertBC03(files=None):
             # Read useless array
             tmp, lastLine = readBC03Array(file, lastLineFloat=lastLine)
             seds[iFile, iAge] = lums
-            progress = (iAge+1)/nAge
+            progress = (iAge + 1) / nAge
             sys.stdout.write("\rProgress: [{0:50s}] {1:.1f}%".format(
                 '#' * int(progress * 50), progress * 100))
         print(' ')
@@ -148,34 +176,20 @@ def convertBC03(files=None):
             np.array(lambdaBins, dtype=np.float64))
 
 
-def convert_age_to_scalefactor(sed, ages):
-    """
-    convert age array to scale fctor, and filter corresponding sed array
-
-    Args:
-        sed - numpy array (float) dimensions [Z,a,lambda]
-        ages - (float) Gyr
-    """
-
-    # remove ages above age of universe
-    age_mask = (ages < cosmo.age(0).value) & (ages != 0.)
-
-    ages = ages[age_mask] * u.Gyr
-    sed = sed[:, age_mask, :]
-
-    # convert to scale factor
-    scale_factors = cosmo.scale_factor(
-        [z_at_value(cosmo.lookback_time, age) for age in ages])
-
-    return scale_factors, sed
-
-
-def main():
+def make_grid(synthesizer_data_dir):
     """ Main function to convert BC03 grids and
         produce grids used by synthesizer """
 
     # Define base path
-    basepath = "input_files/bc03/bc03/models/Padova2000/"
+    basepath = (f"{synthesizer_data_dir}/input_files/bc03/"
+                "models/Padova2000/chabrier/")
+
+    # Define output
+    if not os.path.exists(f'{synthesizer_data_dir}/grids/'):
+        os.makedirs(f'{synthesizer_data_dir}/grids/')
+
+    model_name = 'bc03_chabrier03'
+    fname = f'{synthesizer_data_dir}/grids/{model_name}.h5'
 
     # Define files
     files = ['bc2003_hr_m122_chab_ssp.ised_ASCII',
@@ -186,28 +200,81 @@ def main():
              'bc2003_hr_m172_chab_ssp.ised_ASCII']
 
     out = convertBC03([basepath + s for s in files])
-    # bc2003_hr_m62_chab_ssp_Pickles_Stelib.ised_ASCII
 
-    zsol = 0.0127
+    metallicities = out[1]
+    log10metallicities = np.log10(metallicities)
 
-    sed = out[0]                    # Lsol / AA
-    metals = np.log(out[1] / zsol)  # log(Z / Zsol)
-    ages = out[2] / 1e9             # Gyr
-    wl = out[3]      # ??
+    ages = out[2]
+    ages[0] = 1E5
+    log10ages = np.log10(ages)
 
-    # ignore zero age model
-    ages = ages[1:]
-    sed = sed[:, 1:, :]
+    lam = out[3]
+    nu = 3E8/(lam*1E-10)
 
-    ages, sed = convert_age_to_scalefactor(sed, ages)
+    spec = out[0]
 
-    fname = 'output/bc03.h5'
-    write_data_h5py(fname, 'spec', data=sed, overwrite=True)
-    write_data_h5py(fname, 'ages', data=ages, overwrite=True)
-    write_data_h5py(fname, 'metallicities', data=metals, overwrite=True)
-    write_data_h5py(fname, 'wavelength', data=wl, overwrite=True)
+    spec = np.swapaxes(spec, 0, 1)  #  make (age, metallicity, wavelength)
+
+    spec *= (3.826e33)  # erg s^-1 AA^-1 Msol^-1
+    spec *= lam/nu  # erg s^-1 Hz^-1 Msol^-1
+
+    na = len(ages)
+    nZ = len(metallicities)
+
+    log10Q = np.zeros((na, nZ))  # the ionising photon production rate
+
+    for iZ, metallicity in enumerate(metallicities):
+        for ia, log10age in enumerate(log10ages):
+
+            # --- calcualte ionising photon luminosity
+            log10Q[ia, iZ] = np.log10(calculate_Q(lam, spec[ia, iZ, :]))
+
+    # write_data_h5py(fname, 'ages', data=ages, overwrite=True)
+    # write_attribute(fname, 'ages', 'Description',
+    #                 'Stellar population ages years')
+    # write_attribute(fname, 'ages', 'Units', 'yr')
+
+    write_data_h5py(fname, 'log10ages', data=log10ages, overwrite=True)
+    write_attribute(fname, 'log10ages', 'Description',
+                    'Stellar population ages in log10 years')
+    write_attribute(fname, 'log10ages', 'Units', 'log10(yr)')
+
+    # write_data_h5py(fname, 'metallicities', data=metallicities, overwrite=True)
+    # write_attribute(fname, 'metallicities', 'Description',
+    #                 'raw abundances')
+    # write_attribute(fname, 'metallicities', 'Units', 'dimensionless [Z]')
+
+    write_data_h5py(fname, 'log10metallicities', data=log10metallicities,
+                    overwrite=True)
+    write_attribute(fname, 'log10metallicities', 'Description',
+                    'raw abundances in log10')
+    write_attribute(fname, 'log10metallicities', 'Units',
+                    'dimensionless [log10(Z)]')
+
+    write_data_h5py(fname, 'log10Q', data=log10Q, overwrite=True)
+    write_attribute(fname, 'log10Q', 'Description',
+              """Two-dimensional ionising photon production rate grid, [age,Z]""")
+
+    write_data_h5py(fname, 'spectra/wavelength', data=lam, overwrite=True)
+    write_attribute(fname, 'spectra/wavelength', 'Description',
+                    'Wavelength of the spectra grid')
+    write_attribute(fname, 'spectra/wavelength', 'Units', 'AA')
+
+    write_data_h5py(fname, 'spectra/stellar', data=spec, overwrite=True)
+    write_attribute(fname, 'spectra/stellar', 'Description',
+                    """Three-dimensional spectra grid, [age, metallicity
+                    , wavelength]""")
+    write_attribute(fname, 'spectra/stellar', 'Units', 'erg s^-1 Hz^-1')
 
 
-# Lets include a way to call this script not via an entry point
 if __name__ == "__main__":
-    main()
+
+    parser = argparse.ArgumentParser(description='Install the BC03 grid to the specified directory.')
+    parser.add_argument("-dir", "--directory", type=str, required=True)
+    args = parser.parse_args()
+
+    synthesizer_data_dir = args.directory
+
+    download_data()
+    untar_data(synthesizer_data_dir)
+    make_grid(synthesizer_data_dir)

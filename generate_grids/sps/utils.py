@@ -1,5 +1,32 @@
 import h5py
 import numpy as np
+from synthesizer.sed import calculate_Q
+
+
+
+def add_log10Q(filename):
+
+    with h5py.File(filename, 'a') as hf:
+
+        log10metallicities = hf['log10metallicities'][()]
+        log10ages = hf['log10ages'][()]
+
+        nZ = len(log10metallicities)
+        na = len(log10ages)
+
+        lam = hf['spectra/wavelength'][()]
+        if 'log10Q' in hf.keys(): del hf['log10Q'] # delete log10Q if it already exists
+        hf['log10Q'] = np.zeros((na, nZ))
+
+        # ---- determine stellar log10Q
+
+        for iZ, log10Z  in enumerate(log10metallicities):
+            for ia, log10age in enumerate(log10ages):
+                hf['log10Q'][ia, iZ] = np.log10(calculate_Q(lam, hf['spectra/stellar'][ia, iZ, :]))
+
+
+
+
 
 
 def write_data_h5py(filename, name, data, overwrite=False):
@@ -45,7 +72,6 @@ def write_attribute(filename, obj, key, value):
         dset = h5file[obj]
         dset.attrs[key] = value
 
-
 def get_names_h5py(filename, group):
     """
     Return list of the names of objects inside a group
@@ -67,29 +93,6 @@ def load_arr(name, filename):
         arr = np.array(f.get(name))
 
     return arr
-
-
-class Singleton(type):
-    """ A metaclass used to ensure singleton behaviour, i.e. there can only
-        ever be a single instance of a class in a namespace.
-
-    Adapted from:
-    https://stackoverflow.com/questions/6760685/creating-a-singleton-in-python
-    """
-
-    # Define private dictionary to store instances
-    _instances = {}
-
-    def __call__(cls, *args, **kwargs):
-        """ When a new instance is made (calling class), the original instance
-            is returned giving it a new reference to the single insance"""
-
-        # If we don't already have an instance the dictionary will be empty
-        if cls not in cls._instances:
-            cls._instances[cls] = super(Singleton, cls).__call__(*args,
-                                                                 **kwargs)
-        return cls._instances[cls]
-
 
 def read_params(param_file):
     """
