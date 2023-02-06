@@ -1,8 +1,5 @@
 
 
-# Create a model SED
-
-
 import flare.plt as fplt
 from synthesizer.grid import Grid
 import numpy as np
@@ -18,6 +15,11 @@ sys.path.insert(0, os.path.abspath(
 
 
 def plot_spectra(grid, log10Z=-2.0, log10age=6.0, spec_names=None):
+    """
+    Plots spectra at the closest grid point to a choice of metallicity and log10age.
+
+
+    """
 
     iZ, log10Z = grid.get_nearest_log10Z(log10Z)
     print(f'closest metallicity: {log10Z:.2f}')
@@ -66,6 +68,10 @@ if __name__ == '__main__':
     # Define the grid
     grid_name = "test_grid"
     grid_dir = script_path + "/../../tests/test_grid/"
+
+    # grid_dir = '/Users/stephenwilkins/Dropbox/Research/data/synthesizer/grids'
+    # grid_name = 'bpass-2.2.1-bin_chabrier03-0.1,100.0_cloudy'
+    # grid_name = 'bpass-2.2.1-bin_chabrier03-0.1,100.0'
 
     grid = Grid(grid_name, grid_dir=grid_dir)
 
