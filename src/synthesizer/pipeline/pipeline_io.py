@@ -300,7 +300,7 @@ class PipelineIO:
 
         # Write the dataset with the appropriate units
         with h5py.File(self.filepath, "a") as hdf:
-            dset = hdf.create_dataset(key, data=data)
+            dset = hdf.create_dataset(key, data=data, compression="gzip")
             dset.attrs["Units"] = units
 
     def write_dataset_parallel(self, data, key):
@@ -323,6 +323,7 @@ class PipelineIO:
             "a",
             driver="mpio",
             comm=self.comm,
+            compression="gzip",
         ) as hdf:
             dset = hdf[key]
             dset[self.start : self.end, ...] = data
