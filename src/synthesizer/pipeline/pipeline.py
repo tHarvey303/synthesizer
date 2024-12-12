@@ -1463,15 +1463,59 @@ class Pipeline:
         # Done!
         self._took(start, "Extra analysis")
 
-    def write(self, outpath, verbose=None):
+    def write(
+        self,
+        outpath,
+        verbose=None,
+        output_lnu=True,
+        output_fnu=True,
+        output_lum=True,
+        output_flux=True,
+        output_lines=True,
+        output_images_lnu=True,
+        output_images_fnu=True,
+        output_images_lnu_psf=True,
+        output_images_fnu_psf=True,
+    ):
         """
         Write what we have produced to a HDF5 file.
+
+        By default everything that has been calculated will be written out. If
+        you only want a subset of the data then set the appropriate flags to
+        False.
 
         Args:
             outpath (str):
                 The path to the HDF5 file to write.
             verbose (bool, optional):
                 If set, override the Pipeline verbose setting.
+            output_lnu (bool, optional):
+                If True, write out the spectral luminosity densities.
+                Default is True.
+            output_fnu (bool, optional):
+                If True, write out the spectral flux densities.
+                Default is True.
+            output_lum (bool, optional):
+                If True, write out the photometric luminosities.
+                Default is True.
+            output_flux (bool, optional):
+                If True, write out the photometric fluxes.
+                Default is True.
+            output_lines (bool, optional):
+                If True, write out the emission line luminosities.
+                Default is True.
+            output_images_lnu (bool, optional):
+                If True, write out the luminosity images.
+                Default is True.
+            output_images_fnu (bool, optional):
+                If True, write out the flux images.
+                Default is True.
+            output_images_lnu_psf (bool, optional):
+                If True, write out the luminosity images with PSFs applied.
+                Default is True.
+            output_images_fnu_psf (bool, optional):
+                If True, write out the flux images with PSFs applied.
+                Default is True.
         """
         # We're done with everything so we know we'll have what is needed for
         # any extra analysis asked for by the user. We'll run these now.
@@ -1507,7 +1551,7 @@ class Pipeline:
             galaxy_indices = None
 
         # Write spectral luminosity densities
-        if self._got_lnu_spectra:
+        if self._got_lnu_spectra and output_lnu:
             self.io_helper.write_data(
                 self.lnu_spectra["Galaxy"],
                 "Galaxies/Spectra/SpectralLuminosityDensities",
@@ -1525,7 +1569,7 @@ class Pipeline:
             )
 
         # Write spectral flux densities
-        if self._got_fnu_spectra:
+        if self._got_fnu_spectra and output_fnu:
             self.io_helper.write_data(
                 self.fnu_spectra["Galaxy"],
                 "Galaxies/Spectra/SpectralFluxDensities",
@@ -1543,7 +1587,7 @@ class Pipeline:
             )
 
         # Write photometric luminosities
-        if self._got_luminosities:
+        if self._got_luminosities and output_lum:
             self.io_helper.write_data(
                 self.luminosities["Galaxy"],
                 "Galaxies/Photometry/Luminosities",
@@ -1561,7 +1605,7 @@ class Pipeline:
             )
 
         # Write photometric fluxes
-        if self._got_fluxes:
+        if self._got_fluxes and output_flux:
             self.io_helper.write_data(
                 self.fluxes["Galaxy"],
                 "Galaxies/Photometry/Fluxes",
@@ -1579,7 +1623,7 @@ class Pipeline:
             )
 
         # Write emission line luminosities
-        if self._got_lum_lines:
+        if self._got_lum_lines and output_lines:
             self.io_helper.write_data(
                 self.lines_lum["Galaxy"],
                 "Galaxies/Lines/Luminosity",
@@ -1612,7 +1656,7 @@ class Pipeline:
             )
 
         # Write luminosity images
-        if self._got_images_lum:
+        if self._got_images_lum and output_images_lnu:
             self.io_helper.write_data(
                 self.images_lum["Galaxy"],
                 "Galaxies/Images/Luminosity",
@@ -1630,7 +1674,7 @@ class Pipeline:
             )
 
         # Write PSF luminosity images
-        if self._got_images_lum_psf:
+        if self._got_images_lum_psf and output_images_lnu_psf:
             self.io_helper.write_data(
                 self.images_lum_psf["Galaxy"],
                 "Galaxies/PSFImages/Luminosity",
@@ -1649,7 +1693,7 @@ class Pipeline:
 
         # Write flux images (again these are heavy so we'll collect them
         # separately)
-        if self._got_images_flux:
+        if self._got_images_flux and output_images_fnu:
             self.io_helper.write_data(
                 self.images_flux["Galaxy"],
                 "Galaxies/Images/Flux",
@@ -1667,7 +1711,7 @@ class Pipeline:
             )
 
         # Write PSF flux images
-        if self._got_images_flux_psf:
+        if self._got_images_flux_psf and output_images_fnu_psf:
             self.io_helper.write_data(
                 self.images_flux_psf["Galaxy"],
                 "Galaxies/PSFImages/Flux",
