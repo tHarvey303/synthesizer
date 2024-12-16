@@ -1462,11 +1462,7 @@ class Pipeline:
                 self._took(func_start, f"{key} extra analysis")
             except Exception as e:
                 self._print(
-                    "Error running extra analysis function"
-                    f" {func.__name__}: {e}"
-                )
-                self._analysis_results[key] = unyt_array(
-                    [0.0 for _ in self.galaxies], "dimensionless"
+                    "Error running extra analysis function" f" {key}: {e}"
                 )
 
         # Done!
