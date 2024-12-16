@@ -1449,16 +1449,25 @@ class Pipeline:
             self._analysis_kwargs,
             self._analysis_results_keys,
         ):
-            func_start = time.perf_counter()
-            res = []
-            for g in self.galaxies:
-                res.append(func(g, *args, **kwargs))
-            self._analysis_results[key] = (
-                combine_list_of_dicts(res)
-                if isinstance(res[0], dict)
-                else unyt_array(res)
-            )
-            self._took(func_start, f"{key} extra analysis")
+            try:
+                func_start = time.perf_counter()
+                res = []
+                for g in self.galaxies:
+                    res.append(func(g, *args, **kwargs))
+                self._analysis_results[key] = (
+                    combine_list_of_dicts(res)
+                    if isinstance(res[0], dict)
+                    else unyt_array(res)
+                )
+                self._took(func_start, f"{key} extra analysis")
+            except Exception as e:
+                self._print(
+                    "Error running extra analysis function"
+                    f" {func.__name__}: {e}"
+                )
+                self._analysis_results[key] = unyt_array(
+                    [0.0 for _ in self.galaxies], "dimensionless"
+                )
 
         # Done!
         self._took(start, "Extra analysis")
