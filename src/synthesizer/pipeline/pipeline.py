@@ -1439,24 +1439,61 @@ class Pipeline:
             self._analysis_kwargs,
             self._analysis_results_keys,
         ):
+            # Run the analysis function on each galaxy
             try:
                 func_start = time.perf_counter()
                 res = []
                 for g in self.galaxies:
                     res.append(func(g, *args, **kwargs))
+            except Exception as e:
+                self._print(
+                    "Error running extra analysis function" f" {key}: {e}"
+                )
+
+            # Store the results and combine them if necessary
+            try:
                 if "BlackHoles" in key:
                     print(key, res)
-                self._analysis_results[key] = (
-                    combine_list_of_dicts(res)
-                    if isinstance(res[0], dict)
-                    else unyt_array(res)
-                )
+
+                # Check we actually have some results
+                if len(res) == 0:
+                    self._print(
+                        f"Extra analysis function {key} returned no results"
+                    )
+                    continue
+
+                # Ensure the data of all results is in the same format.
+                types = set([type(r) for r in res])
+                if len(types) > 1:
+                    raise exceptions.PipelineError(
+                        "All results from extra analysis functions must be "
+                        f"of the same type. Got: {set(types)}"
+                    )
+
+                # If we have a list of dictionaries then we need to combine
+                # them into a single dictionary. Otherwise we can just store
+                # the list of results as a unyt array.
+                if isinstance(res[0], dict):
+                    combined_data = combine_list_of_dicts(res)
+                else:
+                    combined_data = unyt_array(res)
+
+                # Ensure we have data after combining
+                if len(combined_data) == 0:
+                    self._print(
+                        f"Extra analysis function {key} returned no data"
+                    )
+                    continue
+
+                # Store the data
+                self._analysis_results[key] = combined_data
+
                 if "BlackHoles" in key:
                     print(key, self._analysis_results[key])
                 self._took(func_start, f"{key} extra analysis")
             except Exception as e:
                 self._print(
-                    "Error running extra analysis function" f" {key}: {e}"
+                    "Error storing extra analysis results" f" {key}: {e}"
                 )
 
         # Count the number of extra analysis results we have generated
