@@ -1462,7 +1462,7 @@ class Pipeline:
                 # Ensure the data of all results is in the same format.
                 types = set([type(r) for r in res])
                 if len(types) > 1:
-                    raise exceptions.PipelineError(
+                    raise exceptions.BadResult(
                         "All results from extra analysis functions must be "
                         f"of the same type. Got: {set(types)}"
                     )
