@@ -39,6 +39,7 @@ from synthesizer.instruments.filters import FilterCollection
 from synthesizer.pipeline.pipeline_io import PipelineIO
 from synthesizer.pipeline.pipeline_utils import (
     combine_list_of_dicts,
+    count_dict_recursive,
 )
 from synthesizer.utils.art import Art
 from synthesizer.warnings import warn
@@ -799,10 +800,13 @@ class Pipeline:
         for spec_type, spec in self.fnu_spectra["BlackHole"].items():
             self.fnu_spectra["BlackHole"][spec_type] = unyt_array(spec)
 
+        # Count the number of spectra we have generated
+        n_spectra = count_dict_recursive(self.lnu_spectra)
+
         # Done!
         self._got_lnu_spectra = True
         self._got_fnu_spectra = True if cosmo is not None else False
-        self._took(start, "Generating spectra")
+        self._took(start, f"Generating {n_spectra} spectra")
 
     def get_photometry_luminosities(self):
         """Compute the photometric luminosities from the generated spectra."""
@@ -860,9 +864,12 @@ class Pipeline:
                     lnu
                 )
 
+        # Count the number of luminosities we have generated
+        n_luminosities = count_dict_recursive(self.luminosities)
+
         # Done!
         self._got_luminosities = True
-        self._took(start, "Getting photometric luminosities")
+        self._took(start, f"Getting {n_luminosities} photometric luminosities")
 
     def get_photometry_fluxes(self):
         """Compute the photometric fluxes from the generated spectra."""
@@ -918,9 +925,12 @@ class Pipeline:
             for filt, fnu in phot.items():
                 self.fluxes["BlackHole"][spec_type][filt] = unyt_array(fnu)
 
+        # Count the number of fluxes we have generated
+        n_fluxes = count_dict_recursive(self.fluxes)
+
         # Done!
         self._got_fluxes = True
-        self._took(start, "Getting photometric fluxes")
+        self._took(start, f"Getting {n_fluxes} photometric fluxes")
 
     def get_lines(self, line_ids):
         """
@@ -1004,9 +1014,12 @@ class Pipeline:
                     unyt_array(lum)
                 )
 
+        # Count the number of lines we have generated
+        n_lines = count_dict_recursive(self.lines_lum)
+
         # Done!
         self._got_lum_lines = True
-        self._took(start, "Getting emission lines")
+        self._took(start, f"Getting {n_lines} emission lines")
 
     def get_images_luminosity(
         self,
@@ -1102,9 +1115,12 @@ class Pipeline:
             for f, img in imgs.items():
                 self.images_lum["BlackHole"][spec_type][f] = unyt_array(img)
 
+        # Count the number of images we have generated
+        n_images = count_dict_recursive(self.images_lum)
+
         # Done!
         self._got_images_lum = True
-        self._took(start, "Getting luminosity images")
+        self._took(start, f"Generating {n_images} luminosity images")
 
     def apply_psfs_luminosity(self):
         """Apply any instrument PSFs to the luminosity images."""
@@ -1202,9 +1218,12 @@ class Pipeline:
                     img
                 )
 
+        # Count the number of images we have generated
+        n_images = count_dict_recursive(self.images_lum_psf)
+
         # Done!
         self._got_images_lum_psf = True
-        self._took(start, "Applying PSFs to luminosity images")
+        self._took(start, f"Applying PSFs to {n_images} luminosity images")
 
     def get_images_flux(
         self,
@@ -1300,9 +1319,12 @@ class Pipeline:
             for f, img in imgs.items():
                 self.images_flux["BlackHole"][spec_type][f] = unyt_array(img)
 
+        # Count the number of images we have generated
+        n_images = count_dict_recursive(self.images_flux)
+
         # Done!
         self._got_images_flux = True
-        self._took(start, "Getting flux images")
+        self._took(start, f"Generating {n_images} flux images")
 
     def apply_psfs_flux(self):
         """Apply any instrument PSFs to the flux images."""
@@ -1400,9 +1422,12 @@ class Pipeline:
                     img
                 )
 
+        # Count the number of images we have generated
+        n_images = count_dict_recursive(self.images_flux_psf)
+
         # Done!
         self._got_images_flux_psf = True
-        self._took(start, "Applying PSFs to flux images")
+        self._took(start, f"Applying PSFs to {n_images} flux images")
 
     def get_lnu_data_cubes(self):
         """Compute the spectral luminosity density data cubes."""
@@ -1465,8 +1490,13 @@ class Pipeline:
                     "Error running extra analysis function" f" {key}: {e}"
                 )
 
+        # Count the number of extra analysis results we have generated
+        n_extra_analysis = count_dict_recursive(self._analysis_results)
+
         # Done!
-        self._took(start, "Extra analysis")
+        self._took(
+            start, f"Extra analysis (producing {n_extra_analysis} results)"
+        )
 
     def write(
         self,

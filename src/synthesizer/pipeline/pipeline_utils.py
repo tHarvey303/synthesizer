@@ -172,6 +172,38 @@ def discover_dict_structure(data):
     return output_set
 
 
+def count_dict_recursive(data, prefix=""):
+    """
+    Recursively count the number of leaves in a dictionary.
+
+    Args:
+        obj (dict):
+            The dictionary to search.
+        prefix (str):
+            A prefix to add to the keys of the arrays.
+        output_dict (dict):
+            A dictionary to store the output paths in.
+
+    Returns:
+        dict:
+            A dictionary of all the numpy arrays in the input dictionary.
+    """
+    count = 0
+
+    # If the obj is a dictionary, loop over the keys and values and recurse
+    if isinstance(data, dict):
+        for k, v in data.items():
+            count += count_dict_recursive(
+                v,
+                prefix=f"{prefix}/{k}",
+            )
+        return count
+
+    # Otherwise, we are at a leaf with some data to account for. The count is
+    # Always the first element of the shape tuple
+    return data.shape[0]
+
+
 @lru_cache(maxsize=500)
 def cached_split(split_key):
     """
