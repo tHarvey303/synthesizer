@@ -644,14 +644,12 @@ class Pipeline:
                 threshold=kernel_threshold,
                 nthreads=self.nthreads,
             )
-            print(g.stars.tau_v)
             g.get_black_hole_los_tau_v(
                 kappa=kappa,
                 kernel=kernel,
                 threshold=kernel_threshold,
                 nthreads=self.nthreads,
             )
-            print(g.black_holes.tau_v)
 
         # Done!
         self._took(start, "Getting LOS optical depths")
