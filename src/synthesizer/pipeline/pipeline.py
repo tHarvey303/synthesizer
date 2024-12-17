@@ -1445,14 +1445,14 @@ class Pipeline:
                 for g in self.galaxies:
                     res.append(func(g, *args, **kwargs))
                 if "BlackHoles" in key:
-                    print(res)
+                    print(key, res)
                 self._analysis_results[key] = (
                     combine_list_of_dicts(res)
                     if isinstance(res[0], dict)
                     else unyt_array(res)
                 )
                 if "BlackHoles" in key:
-                    print(self._analysis_results[key])
+                    print(key, self._analysis_results[key])
                 self._took(func_start, f"{key} extra analysis")
             except Exception as e:
                 self._print(
