@@ -1452,9 +1452,6 @@ class Pipeline:
 
             # Store the results and combine them if necessary
             try:
-                if "BlackHoles" in key:
-                    print(key, res)
-
                 # Check we actually have some results
                 if len(res) == 0:
                     self._print(
@@ -1488,9 +1485,8 @@ class Pipeline:
                 # Store the data
                 self._analysis_results[key] = combined_data
 
-                if "BlackHoles" in key:
-                    print(key, self._analysis_results[key])
                 self._took(func_start, f"{key} extra analysis")
+
             except Exception as e:
                 self._print(
                     "Error storing extra analysis results" f" {key}: {e}"
