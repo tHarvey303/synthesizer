@@ -1807,7 +1807,7 @@ class Pipeline:
             )
 
         # Nothing to do if we're using collective I/O
-        if self.io_helper.collective_io:
+        if self.io_helper.is_collective:
             self._print("Using collective I/O, nothing to combine.")
             return
 
@@ -1841,7 +1841,7 @@ class Pipeline:
             )
 
         # Nothing to do if we're using collective I/O
-        if self.io_helper.collective_io:
+        if self.io_helper.is_collective:
             self._print("Using collective I/O, nothing to combine.")
             return
 
