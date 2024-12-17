@@ -1491,7 +1491,13 @@ class Pipeline:
                 )
 
         # Count the number of extra analysis results we have generated
-        n_extra_analysis = count_dict_recursive(self._analysis_results)
+        if (
+            self._analysis_results is not None
+            and len(self._analysis_results) > 0
+        ):
+            n_extra_analysis = count_dict_recursive(self._analysis_results)
+        else:
+            n_extra_analysis = 0
 
         # Done!
         self._took(
