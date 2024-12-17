@@ -4,6 +4,7 @@ from functools import lru_cache
 
 from unyt import unyt_array
 
+from synthesizer import exceptions
 from synthesizer.warnings import warn
 
 
@@ -172,7 +173,7 @@ def discover_dict_structure(data):
     return output_set
 
 
-def count_dict_recursive(data, prefix=""):
+def count_and_check_dict_recursive(data, prefix=""):
     """
     Recursively count the number of leaves in a dictionary.
 
@@ -193,14 +194,33 @@ def count_dict_recursive(data, prefix=""):
     # If the obj is a dictionary, loop over the keys and values and recurse
     if isinstance(data, dict):
         for k, v in data.items():
-            count += count_dict_recursive(
+            count += count_and_check_dict_recursive(
                 v,
                 prefix=f"{prefix}/{k}",
             )
         return count
 
-    # Otherwise, we are at a leaf with some data to account for. The count is
-    # Always the first element of the shape tuple
+    # Otherwise, we are at a leaf with some data to account for. Check the
+    # result makes sense.The count is always the first element of the
+    # shape tuple
+    if data is None:
+        raise exceptions.BadResult(
+            f"Found a NoneType object at {prefix}. "
+            "All results should be numeric with associated units."
+        )
+
+    if not hasattr(data, "shape"):
+        raise exceptions.BadResult(
+            f"Found a non-array object at {prefix}. "
+            "All results should be numeric with associated units."
+        )
+
+    if not hasattr(data, "units"):
+        raise exceptions.BadResult(
+            f"Found an array object without units at {prefix}. "
+            "All results should be numeric with associated units."
+        )
+
     return data.shape[0]
 
 

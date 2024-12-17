@@ -39,7 +39,7 @@ from synthesizer.instruments.filters import FilterCollection
 from synthesizer.pipeline.pipeline_io import PipelineIO
 from synthesizer.pipeline.pipeline_utils import (
     combine_list_of_dicts,
-    count_dict_recursive,
+    count_and_check_dict_recursive,
 )
 from synthesizer.utils.art import Art
 from synthesizer.warnings import warn
@@ -801,7 +801,7 @@ class Pipeline:
             self.fnu_spectra["BlackHole"][spec_type] = unyt_array(spec)
 
         # Count the number of spectra we have generated
-        n_spectra = count_dict_recursive(self.lnu_spectra)
+        n_spectra = count_and_check_dict_recursive(self.lnu_spectra)
 
         # Done!
         self._got_lnu_spectra = True
@@ -865,7 +865,7 @@ class Pipeline:
                 )
 
         # Count the number of luminosities we have generated
-        n_luminosities = count_dict_recursive(self.luminosities)
+        n_luminosities = count_and_check_dict_recursive(self.luminosities)
 
         # Done!
         self._got_luminosities = True
@@ -926,7 +926,7 @@ class Pipeline:
                 self.fluxes["BlackHole"][spec_type][filt] = unyt_array(fnu)
 
         # Count the number of fluxes we have generated
-        n_fluxes = count_dict_recursive(self.fluxes)
+        n_fluxes = count_and_check_dict_recursive(self.fluxes)
 
         # Done!
         self._got_fluxes = True
@@ -1015,7 +1015,7 @@ class Pipeline:
                 )
 
         # Count the number of lines we have generated
-        n_lines = count_dict_recursive(self.lines_lum)
+        n_lines = count_and_check_dict_recursive(self.lines_lum)
 
         # Done!
         self._got_lum_lines = True
@@ -1116,7 +1116,7 @@ class Pipeline:
                 self.images_lum["BlackHole"][spec_type][f] = unyt_array(img)
 
         # Count the number of images we have generated
-        n_images = count_dict_recursive(self.images_lum)
+        n_images = count_and_check_dict_recursive(self.images_lum)
 
         # Done!
         self._got_images_lum = True
@@ -1219,7 +1219,7 @@ class Pipeline:
                 )
 
         # Count the number of images we have generated
-        n_images = count_dict_recursive(self.images_lum_psf)
+        n_images = count_and_check_dict_recursive(self.images_lum_psf)
 
         # Done!
         self._got_images_lum_psf = True
@@ -1320,7 +1320,7 @@ class Pipeline:
                 self.images_flux["BlackHole"][spec_type][f] = unyt_array(img)
 
         # Count the number of images we have generated
-        n_images = count_dict_recursive(self.images_flux)
+        n_images = count_and_check_dict_recursive(self.images_flux)
 
         # Done!
         self._got_images_flux = True
@@ -1423,7 +1423,7 @@ class Pipeline:
                 )
 
         # Count the number of images we have generated
-        n_images = count_dict_recursive(self.images_flux_psf)
+        n_images = count_and_check_dict_recursive(self.images_flux_psf)
 
         # Done!
         self._got_images_flux_psf = True
@@ -1491,13 +1491,9 @@ class Pipeline:
                 )
 
         # Count the number of extra analysis results we have generated
-        if (
-            self._analysis_results is not None
-            and len(self._analysis_results) > 0
-        ):
-            n_extra_analysis = count_dict_recursive(self._analysis_results)
-        else:
-            n_extra_analysis = 0
+        n_extra_analysis = count_and_check_dict_recursive(
+            self._analysis_results
+        )
 
         # Done!
         self._took(
