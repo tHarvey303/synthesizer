@@ -1451,6 +1451,8 @@ class Pipeline:
                     if isinstance(res[0], dict)
                     else unyt_array(res)
                 )
+                if "BlackHoles" in key:
+                    print(self._analysis_results[key])
                 self._took(func_start, f"{key} extra analysis")
             except Exception as e:
                 self._print(

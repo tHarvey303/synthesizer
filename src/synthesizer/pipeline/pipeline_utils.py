@@ -276,7 +276,6 @@ def combine_list_of_dicts(dicts):
                 )
             # Recurse for each key
             merged[key] = recursive_merge([d[key] for d in dict_list])
-            print(f"Merged {key}: {merged[key]}")
         return merged
 
     if not isinstance(dicts[0], dict):
