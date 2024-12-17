@@ -194,6 +194,7 @@ def count_and_check_dict_recursive(data, prefix=""):
     # If the obj is a dictionary, loop over the keys and values and recurse
     if isinstance(data, dict):
         for k, v in data.items():
+            print(f"Checking {prefix}/{k}: {v}")
             count += count_and_check_dict_recursive(
                 v,
                 prefix=f"{prefix}/{k}",
