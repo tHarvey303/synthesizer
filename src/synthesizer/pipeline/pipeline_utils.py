@@ -258,13 +258,11 @@ def combine_list_of_dicts(dicts):
 
     def combine_values(values):
         # Combine values into a unyt_array
-        print(values, unyt_array(values))
         return unyt_array(values)
 
     def recursive_merge(dict_list):
         if not isinstance(dict_list[0], dict):
             # Base case: combine non-dict leaves
-            print("combine_values", dict_list)
             return combine_values(dict_list)
 
         # Recursive case: merge dictionaries
@@ -277,7 +275,6 @@ def combine_list_of_dicts(dicts):
                     f"Key '{key}' is missing in some dictionaries."
                 )
             # Recurse for each key
-            print(key)
             merged[key] = recursive_merge([d[key] for d in dict_list])
         return merged
 
