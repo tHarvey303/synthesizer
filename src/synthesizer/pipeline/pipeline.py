@@ -1,11 +1,11 @@
 """A module containing a pipeline helper class.
 
-This module contains the Pipeline class which is used to run observable
+This module contains the `Pipeline` class, which is used to run observable
 generation pipelines on a set of galaxies. To use this functionality the user
 needs to define the properties of the Pipeline and a function to load the
-galaxies. After which the user can call the various methods to generate the
+galaxies. The user can then call the various methods to generate the mock
 data they need, simplifying a complex pipeline full of boilerplate code to a
-handle full of definitions and calls to the Pipeline object.
+handfull of definitions and calls to the Pipeline object.
 
 Example usage:
 ```python
@@ -1394,7 +1394,7 @@ class Pipeline:
         self._got_images_flux_psf = True
         self._took(start, f"Applying PSFs to {n_images} flux images")
 
-    def get_lnu_data_cubes(self):
+    def get_data_cubes_lnu(self):
         """Compute the spectral luminosity density data cubes."""
         start = time.perf_counter()
         raise exceptions.NotImplemented(
@@ -1405,7 +1405,7 @@ class Pipeline:
         self._got_lnu_data_cubes = True
         self._took(start, "Getting lnu data cubes")
 
-    def get_fnu_data_cubes(self):
+    def get_data_cubes_fnu(self):
         """Compute the Spectral flux density data cubes."""
         start = time.perf_counter()
         raise exceptions.NotImplemented(
