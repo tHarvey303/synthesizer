@@ -256,14 +256,15 @@ def combine_list_of_dicts(dicts):
             The combined dictionary.
     """
 
-    def combine_values(*values):
+    def combine_values(values):
         # Combine values into a unyt_array
+        print(values, unyt_array(values))
         return unyt_array(values)
 
     def recursive_merge(dict_list):
         if not isinstance(dict_list[0], dict):
             # Base case: combine non-dict leaves
-            return combine_values(*dict_list)
+            return combine_values(dict_list)
 
         # Recursive case: merge dictionaries
         merged = {}
