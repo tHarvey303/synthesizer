@@ -782,8 +782,6 @@ class DustAttenuation:
         for tv in this_model.tau_v:
             tau_v += getattr(emitter, tv) if isinstance(tv, str) else tv
 
-        print(this_model.label, tau_v)
-
         # Get the spectra to apply dust to
         if this_model.per_particle:
             apply_dust_to = particle_spectra[this_model.apply_dust_to.label]
