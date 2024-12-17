@@ -194,7 +194,6 @@ def count_and_check_dict_recursive(data, prefix=""):
     # If the obj is a dictionary, loop over the keys and values and recurse
     if isinstance(data, dict):
         for k, v in data.items():
-            print(f"Checking {prefix}/{k}: {v}")
             count += count_and_check_dict_recursive(
                 v,
                 prefix=f"{prefix}/{k}",
@@ -277,6 +276,7 @@ def combine_list_of_dicts(dicts):
                 )
             # Recurse for each key
             merged[key] = recursive_merge([d[key] for d in dict_list])
+            print(f"Merged {key}: {merged[key]}")
         return merged
 
     if not isinstance(dicts[0], dict):
