@@ -1444,6 +1444,8 @@ class Pipeline:
                 res = []
                 for g in self.galaxies:
                     res.append(func(g, *args, **kwargs))
+                if "BlackHoles" in key:
+                    print(res)
                 self._analysis_results[key] = (
                     combine_list_of_dicts(res)
                     if isinstance(res[0], dict)
