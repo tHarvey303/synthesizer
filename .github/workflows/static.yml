@@ -40,7 +40,7 @@ jobs:
       - name: Download test data
         run: |
           synthesizer-download --test-grids -d tests/test_grid/ --dust-grid
-          synthesizer-download -d tests/data --camels-data
+          synthesizer-download -d tests/data --all-sim-data
       - name: Sphinx Build
         run: |
           cd docs
