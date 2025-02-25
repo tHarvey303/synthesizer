@@ -661,33 +661,17 @@ class Stars(Particles, StarsComponent):
         toc("Preparing particle properties", part_start)
 
         # Make sure we get the wavelength index of the grid array
-        nlam = (
-            np.int32(np.sum(lam_mask))
-            if lam_mask is not None
-            else grid.spectra[spectra_type].shape[-1]
-        )
+        nlam = grid.spectra[spectra_type].shape[-1]
 
         # Slice the spectral grids and pad them with copies of the edges.
         spec_start = tic()
         grid_spectra = grid.spectra[spectra_type]
 
-        # Apply the wavelength mask
-        if lam_mask is not None:
-            grid_spectra = np.ascontiguousarray(
-                grid_spectra[..., lam_mask],
-                np.float64,
-            )
         toc("Preparing grid spectra", spec_start)
 
         # Get the grid wavelength arrays (and needed for velocity shifts)
         if vel_shift:
-            if lam_mask is not None:
-                grid_lam = np.ascontiguousarray(
-                    grid._lam[lam_mask],
-                    np.float32,
-                )
-            else:
-                grid_lam = grid._lam[lam_mask]
+            grid_lam = grid._lam
         else:
             grid_lam = None
 
@@ -728,6 +712,8 @@ class Stars(Particles, StarsComponent):
                 grid_assignment_method,
                 nthreads,
                 c.to(vel_units).value,
+                mask,
+                lam_mask,
             )
         elif integrated:
             return (
@@ -746,7 +732,7 @@ class Stars(Particles, StarsComponent):
                     None,
                 ),
                 mask,
-                None,
+                lam_mask,
             )
         else:
             return (
@@ -760,6 +746,8 @@ class Stars(Particles, StarsComponent):
                 nlam,
                 grid_assignment_method,
                 nthreads,
+                mask,
+                lam_mask,
             )
 
     def generate_lnu(
@@ -955,15 +943,6 @@ class Stars(Particles, StarsComponent):
                 self._grid_weights[grid_assignment_method.lower()][
                     grid.grid_name
                 ] = grid_weights
-
-        # If we had a wavelength mask we need to make sure we return a spectra
-        # compatible with the original wavelength array.
-        if lam_mask is not None:
-            lam_mask_start = tic()
-            out_spec = np.zeros(len(grid.lam))
-            out_spec[lam_mask] = spec
-            spec = out_spec
-            toc("Applying wavelength mask", lam_mask_start)
 
         return spec
 

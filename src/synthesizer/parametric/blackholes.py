@@ -349,6 +349,8 @@ class BlackHole(BlackholesComponent):
             grid_assignment_method,
             nthreads,
             None,
+            None,
+            None,
         )
 
     def _prepare_line_args(

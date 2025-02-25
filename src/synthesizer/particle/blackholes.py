@@ -509,6 +509,8 @@ class BlackHoles(Particles, BlackholesComponent):
                     grid.grid_name,
                     None,
                 ),
+                None,
+                None,
             )
         else:
             return (
