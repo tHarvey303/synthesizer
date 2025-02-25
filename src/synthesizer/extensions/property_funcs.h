@@ -50,7 +50,7 @@ struct grid {
   double *lam;
 
   /* The mask array denoting which wavelength elements should be included. */
-  int *lam_mask;
+  npy_bool *lam_mask;
 };
 
 /* A struct to hold particle properties. */
@@ -69,13 +69,14 @@ struct particles {
   double *velocities;
 
   /* The mask array denoting which particles should be included. */
-  int *mask;
+  npy_bool *mask;
 };
 
 /* Prototypes */
 void *synth_malloc(size_t n, char *msg);
 double *extract_data_double(PyArrayObject *np_arr, char *name);
 int *extract_data_int(PyArrayObject *np_arr, char *name);
+npy_bool *extract_data_bool(PyArrayObject *np_arr, char *name);
 double **extract_grid_props(PyObject *grid_tuple, int ndim, int *dims);
 double **extract_part_props(PyObject *part_tuple, int ndim, int npart);
 struct grid *get_spectra_grid_struct(PyObject *grid_tuple,

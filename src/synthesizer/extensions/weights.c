@@ -106,7 +106,7 @@ static void weight_loop_cic_serial(struct grid *grid, struct particles *parts,
   double *part_masses = parts->mass;
   double **part_props = parts->props;
   int npart = parts->npart;
-  int *mask = parts->mask;
+  npy_bool *mask = parts->mask;
 
   /* Set the sub cell constants we'll use below. */
   const int num_sub_cells = 1 << ndim; /* 2^ndim */
@@ -204,7 +204,7 @@ static void weight_loop_cic_omp(struct grid *grid, struct particles *parts,
   double *part_masses = parts->mass;
   double **part_props = parts->props;
   int npart = parts->npart;
-  int *mask = parts->mask;
+  npy_bool *mask = parts->mask;
 
   /* Set the sub cell constants we'll use below. */
   const int num_sub_cells = 1 << ndim; // 2^ndim
@@ -435,7 +435,7 @@ static void weight_loop_ngp_serial(struct grid *grid, struct particles *parts,
   double *part_masses = parts->mass;
   double **part_props = parts->props;
   int npart = parts->npart;
-  int *mask = parts->mask;
+  npy_bool *mask = parts->mask;
 
   /* Convert out. */
   double *out_arr = (double *)out;
@@ -493,7 +493,7 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
   double *part_masses = parts->mass;
   double **part_props = parts->props;
   int npart = parts->npart;
-  int *mask = parts->mask;
+  npy_bool *mask = parts->mask;
 
 #pragma omp parallel num_threads(nthreads)
   {
@@ -513,7 +513,7 @@ static void weight_loop_ngp_omp(struct grid *grid, struct particles *parts,
 
     /* Get local pointers to the particle properties. */
     double *local_part_masses = part_masses + start;
-    int *local_mask = (mask == NULL) ? mask : mask + start;
+    npy_bool *local_mask = (mask == NULL) ? mask : mask + start;
 
     /* Allocate a local output array. */
     double *local_out_arr = calloc(out_size, sizeof(double));
