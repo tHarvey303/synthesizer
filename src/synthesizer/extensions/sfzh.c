@@ -46,11 +46,12 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
   int ndim, npart, nthreads;
   PyObject *grid_tuple, *part_tuple;
   PyArrayObject *np_part_mass, *np_ndims;
+  PyArrayObject *np_mask;
   char *method;
 
-  if (!PyArg_ParseTuple(args, "OOOOiisi", &grid_tuple, &part_tuple,
+  if (!PyArg_ParseTuple(args, "OOOOiisiO", &grid_tuple, &part_tuple,
                         &np_part_mass, &np_ndims, &ndim, &npart, &method,
-                        &nthreads))
+                        &nthreads, &np_mask))
     return NULL;
 
   /* Extract the grid struct. */
@@ -63,7 +64,7 @@ PyObject *compute_sfzh(PyObject *self, PyObject *args) {
 
   /* Extract the particle struct. */
   struct particles *part_props = get_part_struct(
-      part_tuple, np_part_mass, /*np_velocities*/ NULL, NULL, npart, ndim);
+      part_tuple, np_part_mass, /*np_velocities*/ NULL, np_mask, npart, ndim);
   if (part_props == NULL) {
     return NULL;
   }

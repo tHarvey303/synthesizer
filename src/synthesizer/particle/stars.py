@@ -1990,6 +1990,7 @@ class Stars(Particles, StarsComponent):
             npart,
             grid_assignment_method,
             nthreads,
+            None,
         )
 
     def get_sfzh(
@@ -2129,6 +2130,7 @@ class Stars(Particles, StarsComponent):
             npart,
             grid_assignment_method,
             nthreads,
+            None,
         )
 
     def get_sfh(self, log10ages, grid_assignment_method="cic", nthreads=0):
@@ -2281,6 +2283,7 @@ class Stars(Particles, StarsComponent):
             npart,
             grid_assignment_method,
             nthreads,
+            None,
         )
 
     def get_metal_dist(
