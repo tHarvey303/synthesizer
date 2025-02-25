@@ -258,7 +258,7 @@ struct grid *get_spectra_grid_struct(PyObject *grid_tuple,
 
   /* Extract the wavelength mask array, if this is Py_None then we will
    * treat it as NULL. */
-  if (np_lam_mask != Py_None) {
+  if (np_lam_mask != NULL && np_lam_mask != Py_None) {
     grid->lam_mask = extract_data_bool(np_lam_mask, "lam_mask");
     if (grid->lam_mask == NULL) {
       return NULL;
@@ -405,7 +405,7 @@ struct particles *get_part_struct(PyObject *part_tuple,
 
   /* Extract a pointer to the particle mask, if this is Py_None then we will
    * treat it as NULL. */
-  if (np_mask != Py_None) {
+  if (np_mask != NULL && np_mask != Py_None) {
     particles->mask = extract_data_bool(np_mask, "mask");
     if (particles->mask == NULL) {
       return NULL;
