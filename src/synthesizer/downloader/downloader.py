@@ -166,6 +166,17 @@ def download_camels_data(destination):
     _download("camels_subhalo.hdf5", destination)
 
 
+def download_sc_sam_test_data(destination):
+    """
+    Download the SC-SAM test data.
+
+    Args:
+        destination (str)
+            The path to the destination directory.
+    """
+    _download("sc-sam_sfhist.dat", destination)
+
+
 def download():
     """Download different datasets based on command line args."""
     # Create the parser
@@ -209,6 +220,21 @@ def download():
         help="Download the CAMELS TNG dataset for testing",
     )
 
+    # Add the flag for processed sc_sam data
+    parser.add_argument(
+        "--scsam-data",
+        "-S",
+        action="store_true",
+        help="Download the SC-SAM data for testing",
+    )
+
+    # Add a flag to grab all simulation data
+    parser.add_argument(
+        "--all-sim-data",
+        action="store_true",
+        help="Download all available simulation data",
+    )
+
     # Add a flag to go ham and download everything
     parser.add_argument(
         "--all",
@@ -237,12 +263,15 @@ def download():
     camels = args.camels_data
     everything = args.all
     dest = args.destination
+    scsam = args.scsam_data
+    all_sim_data = args.all_sim_data
 
     # Are we just getting everything?
     if everything:
         download_test_grids(dest)
         download_dust_grid(dest)
         download_camels_data(dest)
+        download_sc_sam_test_data(dest)
         return
 
     # Test data?
@@ -261,6 +290,15 @@ def download():
     # Camels data?
     if camels:
         download_camels_data(dest)
+
+    # SC-SAM data?
+    if scsam:
+        download_sc_sam_test_data(dest)
+
+    # All simulation data?
+    if all_sim_data:
+        download_camels_data(dest)
+        download_sc_sam_test_data(dest)
 
 
 if __name__ == "__main__":

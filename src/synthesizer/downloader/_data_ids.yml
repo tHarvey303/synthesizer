@@ -23,6 +23,10 @@ TestData:
     file: camels_subhalo.hdf5
     direct_link: https://sussex.box.com/shared/static/xq9wrozw668czer4phwqc34wvu3x46nk.hdf5
 
+  sc-sam_sfhist.dat:
+    file: sc-sam_sfhist.dat
+    direct_link: https://sussex.box.com/shared/static/ep68f9n400tbvg1m82qusyzo3oqceqhb.dat
+
 DustData:
   # Draine and Li dust emission grid
   draine_li_dust_emission_grid_MW_3p1.hdf5:
