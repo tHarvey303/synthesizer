@@ -42,6 +42,11 @@ static double *get_spectra_serial(struct grid *grid_props,
   /* Loop over wavelengths */
   for (int ilam = 0; ilam < grid_props->nlam; ilam++) {
 
+    /* Skip if this wavelength is masked. */
+    if (grid_props->lam_mask != NULL && !grid_props->lam_mask[ilam]) {
+      continue;
+    }
+
     /* Loop over grid cells. */
     for (int grid_ind = 0; grid_ind < grid_props->size; grid_ind++) {
 
@@ -110,6 +115,11 @@ static double *get_spectra_omp(struct grid *grid_props, double *grid_weights,
 
     /* Loop over wavelengths. */
     for (int ilam = 0; ilam < end - start; ilam++) {
+
+      /* Skip if this wavelength is masked. */
+      if (grid_props->lam_mask != NULL && !grid_props->lam_mask[start + ilam]) {
+        continue;
+      }
 
       /* Temporary value to hold the the spectra for this wavelength. */
       double this_element = 0.0;
