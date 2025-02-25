@@ -620,11 +620,6 @@ class Stars(Particles, StarsComponent):
                 A tuple of all the arguments required by the C extension.
         """
         arg_start = tic()
-        # Make a dummy mask if none has been passed
-        if mask is None:
-            mask_start = tic()
-            mask = np.ones(self.nparticles, dtype=bool)
-            toc("Creating mask", mask_start)
 
         # Set up the inputs to the C function.
         grid_start = tic()
@@ -635,13 +630,11 @@ class Stars(Particles, StarsComponent):
         toc("Preparing grid properties", grid_start)
         part_start = tic()
         part_props = [
-            np.ascontiguousarray(self.log10ages[mask], dtype=np.float64),
-            np.ascontiguousarray(
-                self.log10metallicities[mask], dtype=np.float64
-            ),
+            np.ascontiguousarray(self.log10ages, dtype=np.float64),
+            np.ascontiguousarray(self.log10metallicities, dtype=np.float64),
         ]
         part_mass = np.ascontiguousarray(
-            self._initial_masses[mask],
+            self._initial_masses,
             dtype=np.float64,
         )
 
@@ -649,7 +642,7 @@ class Stars(Particles, StarsComponent):
         # has been requested)
         if self.velocities is not None and vel_shift:
             part_vels = np.ascontiguousarray(
-                self._velocities[mask],
+                self._velocities,
                 dtype=np.float64,
             )
             vel_units = self.velocities.units
@@ -663,7 +656,7 @@ class Stars(Particles, StarsComponent):
             vel_units = None
 
         # Make sure we set the number of particles to the size of the mask
-        npart = np.int32(np.sum(mask))
+        npart = self.nstars
 
         toc("Preparing particle properties", part_start)
 
@@ -752,6 +745,8 @@ class Stars(Particles, StarsComponent):
                     grid.grid_name,
                     None,
                 ),
+                mask,
+                None,
             )
         else:
             return (

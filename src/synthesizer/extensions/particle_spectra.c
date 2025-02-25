@@ -1124,14 +1124,14 @@ PyObject *compute_particle_seds(PyObject *self, PyObject *args) {
 
   /* Extract the grid struct. */
   struct grid *grid_props = get_spectra_grid_struct(
-      grid_tuple, np_ndims, np_grid_spectra, /*np_lam*/ NULL, ndim, nlam);
+      grid_tuple, np_ndims, np_grid_spectra, /*np_lam*/ NULL, NULL, ndim, nlam);
   if (grid_props == NULL) {
     return NULL;
   }
 
   /* Extract the particle struct. */
   struct particles *part_props = get_part_struct(
-      part_tuple, np_part_mass, /*np_velocities*/ NULL, npart, ndim);
+      part_tuple, np_part_mass, /*np_velocities*/ NULL, NULL, npart, ndim);
   if (part_props == NULL) {
     return NULL;
   }
@@ -1224,14 +1224,14 @@ PyObject *compute_part_seds_with_vel_shift(PyObject *self, PyObject *args) {
 
   /* Extract the grid struct. */
   struct grid *grid_props = get_spectra_grid_struct(
-      grid_tuple, np_ndims, np_grid_spectra, np_lam, ndim, nlam);
+      grid_tuple, np_ndims, np_grid_spectra, np_lam, NULL, ndim, nlam);
   if (grid_props == NULL) {
     return NULL;
   }
 
   /* Extract the particle struct. */
-  struct particles *part_props =
-      get_part_struct(part_tuple, np_part_mass, np_velocities, npart, ndim);
+  struct particles *part_props = get_part_struct(
+      part_tuple, np_part_mass, np_velocities, NULL, npart, ndim);
   if (part_props == NULL) {
     return NULL;
   }
