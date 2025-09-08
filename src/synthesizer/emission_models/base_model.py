@@ -1655,7 +1655,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         """Load an emission model tree from an HDF5 group.
 
         This recursively reconstructs an emission model and its complete tree
-        from HDF5 data. The user can reinstantiate complex models with minimal 
+        from HDF5 data. The user can reinstantiate complex models with minimal
         input by providing either pre-loaded grids or a path to grid files.
 
         Args:
@@ -1666,7 +1666,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 If None, grids will be loaded as needed from grid_path.
             grid_path (str, optional):
                 Path to directory containing grid files. If None and grids
-                is None, will attempt to use synthesizer's default grid 
+                is None, will attempt to use synthesizer's default grid
                 loading mechanism.
 
         Returns:
@@ -1677,7 +1677,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             # Load model with pre-loaded grids
             with h5py.File("my_model.h5", "r") as f:
                 model = EmissionModel.from_hdf5(f["model"], grids=my_grids)
-            
+
             # Load model with grid path
             with h5py.File("my_model.h5", "r") as f:
                 model = EmissionModel.from_hdf5(
@@ -1740,7 +1740,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 if "FixedParameters" in group:
                     fixed_params_group = group["FixedParameters"]
                     for key in fixed_params_group.attrs:
-                        models_dict[label]["fixed_parameters"][key] = fixed_params_group.attrs[key]
+                        models_dict[label]["fixed_parameters"][key] = (
+                            fixed_params_group.attrs[key]
+                        )
 
                 # Load children information
                 if "Children" in group:
@@ -1764,33 +1766,90 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         created_models = {}
 
         def _reconstruct_transformer(transformer_type_str, group_attrs):
-            """Reconstruct a transformer object from its type string and attributes."""
+            """Reconstruct a transformer from its type string and attributes."""
             # Import transformer classes here to avoid circular imports
             try:
+                # Dust attenuation transformers
                 if "PowerLaw" in transformer_type_str:
-                    from synthesizer.emission_models.transformers.dust_attenuation import (
-                        PowerLaw,
-                    )
+                    from synthesizer.emission_models.transformers.dust_attenuation import PowerLaw  # noqa: E501
+
                     slope = group_attrs.get('transformer_slope', -1.0)
                     return PowerLaw(slope=slope)
 
                 elif "Calzetti2000" in transformer_type_str:
-                    from synthesizer.emission_models.transformers.dust_attenuation import (
-                        Calzetti2000,
-                    )
+                    from synthesizer.emission_models.transformers.dust_attenuation import Calzetti2000  # noqa: E501
+
                     return Calzetti2000()
 
                 elif "MWN18" in transformer_type_str:
-                    from synthesizer.emission_models.transformers.dust_attenuation import (
-                        MWN18,
-                    )
+                    from synthesizer.emission_models.transformers.dust_attenuation import MWN18  # noqa: E501
+
                     return MWN18()
+
+                elif "GrainsWD01" in transformer_type_str:
+                    from synthesizer.emission_models.transformers.dust_attenuation import GrainsWD01  # noqa: E501
+
+                    return GrainsWD01()
+
+                elif "ParametricLi08" in transformer_type_str:
+                    from synthesizer.emission_models.transformers.dust_attenuation import ParametricLi08  # noqa: E501
+
+                    # Extract parameters if available
+                    slope = group_attrs.get('transformer_slope', -1.0)
+                    return ParametricLi08(slope=slope)
+
+                # Escape fraction transformers
+                elif "EscapedFraction" in transformer_type_str:
+                    from synthesizer.emission_models.transformers.escape_fraction import EscapedFraction  # noqa: E501
+
+                    fesc_attrs = group_attrs.get('transformer_fesc_attrs', ("fesc",))
+                    if isinstance(fesc_attrs, str):
+                        fesc_attrs = (fesc_attrs,)
+                    return EscapedFraction(fesc_attrs=fesc_attrs)
+
+                elif "ProcessedFraction" in transformer_type_str:
+                    from synthesizer.emission_models.transformers.escape_fraction import ProcessedFraction  # noqa: E501
+
+                    fesc_attrs = group_attrs.get('transformer_fesc_attrs', ("fesc",))
+                    if isinstance(fesc_attrs, str):
+                        fesc_attrs = (fesc_attrs,)
+                    return ProcessedFraction(fesc_attrs=fesc_attrs)
+
+                elif "CoveringFraction" in transformer_type_str:
+                    from synthesizer.emission_models.transformers.escape_fraction import CoveringFraction  # noqa: E501
+
+                    covering_attrs = group_attrs.get('transformer_covering_attrs', ("covering_fraction",))
+                    if isinstance(covering_attrs, str):
+                        covering_attrs = (covering_attrs,)
+                    return CoveringFraction(covering_attrs=covering_attrs)
+
+                elif "EscapingFraction" in transformer_type_str:
+                    from synthesizer.emission_models.transformers.escape_fraction import EscapingFraction  # noqa: E501
+
+                    covering_attrs = group_attrs.get('transformer_covering_attrs', ("covering_fraction",))
+                    if isinstance(covering_attrs, str):
+                        covering_attrs = (covering_attrs,)
+                    return EscapingFraction(covering_attrs=covering_attrs)
+
+                # IGM transformers
+                elif "Madau96" in transformer_type_str:
+                    from synthesizer.emission_models.transformers.igm import Madau96  # noqa: E501
+
+                    redshift = group_attrs.get('transformer_redshift', 0.0)
+                    return Madau96(redshift=redshift)
+
+                elif "Inoue14" in transformer_type_str:
+                    from synthesizer.emission_models.transformers.igm import Inoue14  # noqa: E501
+
+                    redshift = group_attrs.get('transformer_redshift', 0.0)
+                    return Inoue14(redshift=redshift)
 
                 # Add more transformer types as needed
                 else:
                     raise NotImplementedError(
                         f"Transformer reconstruction not implemented for: {transformer_type_str}. "
-                        "Supported transformers: PowerLaw, Calzetti2000, MWN18."
+                        "Supported transformers: PowerLaw, Calzetti2000, MWN18, GrainsWD01, ParametricLi08, "
+                        "EscapedFraction, ProcessedFraction, CoveringFraction, EscapingFraction, Madau96, Inoue14."
                     )
             except ImportError as e:
                 raise NotImplementedError(
@@ -1866,8 +1925,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                             else:
                                 raise FileNotFoundError(f"Grid file not found: {grid_name}")
                         else:
-                            # Use default grid loading
-                            grids[grid_name] = Grid(grid_name)
+                            # If no grid_path provided and grid not in grids, raise error
+                            raise FileNotFoundError(f"Grid '{grid_name}' not found in provided grids and no grid_path specified")
 
                     # Get common parameters for specialized models
                     grid = grids[grid_name]
@@ -1947,8 +2006,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         else:
                             raise FileNotFoundError(f"Grid file not found: {grid_name}")
                     else:
-                        # Use default grid loading
-                        grids[grid_name] = Grid(grid_name)
+                        # If no grid_path provided and grid not in grids, raise error
+                        raise FileNotFoundError(f"Grid '{grid_name}' not found in provided grids and no grid_path specified")
 
                 model = cls(
                     label=label,
