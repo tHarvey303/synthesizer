@@ -1584,7 +1584,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # Save the model attributes
         group.attrs["label"] = self.label
-        group.attrs["emitter"] = self.emitter if self.emitter is not None else "None"
+        group.attrs["emitter"] = (
+            self.emitter if self.emitter is not None else "None"
+        )
         group.attrs["per_particle"] = self.per_particle
         group.attrs["save"] = self.save
         group.attrs["scale_by"] = list(self.scale_by) if self.scale_by else []
@@ -1593,6 +1595,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             if len(self._post_processing) > 0
             else []
         )
+
+        # Save the class information for proper reconstruction
+        group.attrs["class_name"] = self.__class__.__name__
+        group.attrs["class_module"] = self.__class__.__module__
 
         # Save the masks
         if len(self.masks) > 0:
@@ -1623,27 +1629,28 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
     def save_tree_to_hdf5(self, file_path):
         """Save the complete emission model tree to an HDF5 file.
-        
+
         This method saves all models in the tree to a single HDF5 file,
         making it easy to reconstruct the complete model later.
-        
+
         Args:
             file_path (str):
                 Path to the HDF5 file to create.
         """
         import h5py
-        
+
         with h5py.File(file_path, "w") as f:
             # Save metadata about the tree
             f.attrs["root_model"] = self.label
-            f.attrs["synthesizer_version"] = "0.1.dev"  # TODO: get actual version
-            
+            # TODO: get actual version
+            f.attrs["synthesizer_version"] = "0.1.dev"
+
             # Save each model in the tree as a separate group
             for label, model in self._models.items():
                 model_group = f.create_group(label)
                 model.to_hdf5(model_group)
 
-    @classmethod 
+    @classmethod
     def from_hdf5(cls, group, grids=None, grid_path=None):
         """Load an emission model tree from an HDF5 group.
 
@@ -1673,10 +1680,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             
             # Load model with grid path
             with h5py.File("my_model.h5", "r") as f:
-                model = EmissionModel.from_hdf5(f["model"], grid_path="/path/to/grids")
+                model = EmissionModel.from_hdf5(
+                    f["model"], grid_path="/path/to/grids"
+                )
         """
         # Import here to avoid circular imports
         import h5py
+
         from synthesizer.grid import Grid
 
         if grids is None:
@@ -1684,7 +1694,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
         # First pass: collect all model definitions in the group
         model_data = {}
-        
+
         def _collect_model_data(group, models_dict):
             """Recursively collect model data from HDF5 groups."""
             if "type" in group.attrs:
@@ -1702,11 +1712,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     "fixed_parameters": {},
                     "children": []
                 }
-                
+
                 # Handle emitter None case
                 if models_dict[label]["emitter"] == "None":
                     models_dict[label]["emitter"] = None
-                
+
                 # Load masks
                 if "Masks" in group:
                     masks_group = group["Masks"]
@@ -1721,55 +1731,61 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         if "thresh_units" in mask_group.attrs:
                             from unyt import unyt_quantity
                             mask["thresh"] = unyt_quantity(
-                                mask["thresh"], 
+                                mask["thresh"],
                                 mask_group.attrs["thresh_units"]
                             )
                         models_dict[label]["masks"].append(mask)
-                
+
                 # Load fixed parameters
                 if "FixedParameters" in group:
                     fixed_params_group = group["FixedParameters"]
                     for key in fixed_params_group.attrs:
                         models_dict[label]["fixed_parameters"][key] = fixed_params_group.attrs[key]
-                
+
                 # Load children information
                 if "Children" in group:
                     children_data = group["Children"]
                     models_dict[label]["children"] = [
                         child.decode("utf-8") for child in children_data[:]
                     ]
-            
+
             # Recurse into subgroups
             for key in group.keys():
                 if isinstance(group[key], h5py.Group):
                     _collect_model_data(group[key], models_dict)
-        
+
         # Collect all model data
         _collect_model_data(group, model_data)
-        
+
         if not model_data:
             raise ValueError("No emission model data found in HDF5 group")
-        
+
         # Second pass: create models in dependency order
         created_models = {}
-        
+
         def _reconstruct_transformer(transformer_type_str, group_attrs):
             """Reconstruct a transformer object from its type string and attributes."""
             # Import transformer classes here to avoid circular imports
             try:
                 if "PowerLaw" in transformer_type_str:
-                    from synthesizer.emission_models.transformers.dust_attenuation import PowerLaw
+                    from synthesizer.emission_models.transformers.dust_attenuation import (
+                        PowerLaw,
+                    )
                     slope = group_attrs.get('transformer_slope', -1.0)
                     return PowerLaw(slope=slope)
-                
+
                 elif "Calzetti2000" in transformer_type_str:
-                    from synthesizer.emission_models.transformers.dust_attenuation import Calzetti2000
+                    from synthesizer.emission_models.transformers.dust_attenuation import (
+                        Calzetti2000,
+                    )
                     return Calzetti2000()
-                
+
                 elif "MWN18" in transformer_type_str:
-                    from synthesizer.emission_models.transformers.dust_attenuation import MWN18
+                    from synthesizer.emission_models.transformers.dust_attenuation import (
+                        MWN18,
+                    )
                     return MWN18()
-                
+
                 # Add more transformer types as needed
                 else:
                     raise NotImplementedError(
@@ -1780,12 +1796,14 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 raise NotImplementedError(
                     f"Could not import transformer {transformer_type_str}: {e}"
                 )
-        
+
         def _reconstruct_generator(generator_type_str, group_attrs):
             """Reconstruct a generator object from its type string and attributes."""
             try:
                 if "Blackbody" in generator_type_str:
-                    from synthesizer.emission_models.dust.emission import Blackbody
+                    from synthesizer.emission_models.dust.emission import (
+                        Blackbody,
+                    )
                     temperature = None
                     if 'generator_temperature' in group_attrs:
                         from unyt import unyt_quantity
@@ -1794,9 +1812,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         temperature = unyt_quantity(temp_value, temp_units)
                     cmb_factor = group_attrs.get('generator_cmb_factor', 1.0)
                     return Blackbody(temperature=temperature, cmb_factor=cmb_factor)
-                
+
                 elif "Greybody" in generator_type_str:
-                    from synthesizer.emission_models.dust.emission import Greybody
+                    from synthesizer.emission_models.dust.emission import (
+                        Greybody,
+                    )
                     temperature = None
                     if 'generator_temperature' in group_attrs:
                         from unyt import unyt_quantity
@@ -1806,8 +1826,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     emissivity = group_attrs.get('generator_emissivity', 1.5)
                     cmb_factor = group_attrs.get('generator_cmb_factor', 1.0)
                     return Greybody(temperature=temperature, emissivity=emissivity, cmb_factor=cmb_factor)
-                
-                # Add more generator types as needed  
+
+                # Add more generator types as needed
                 else:
                     raise NotImplementedError(
                         f"Generator reconstruction not implemented for: {generator_type_str}. "
@@ -1817,20 +1837,102 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 raise NotImplementedError(
                     f"Could not import generator {generator_type_str}: {e}"
                 )
-        
+
+        def _create_specialized_model(label, model_info, created_models, grids, class_name, class_module):
+            """Create a specialized emission model instance."""
+            try:
+                # Import the specialized class
+                import importlib
+                module = importlib.import_module(class_module)
+                specialized_class = getattr(module, class_name)
+
+                group = model_info["group"]
+
+                # For extraction-based specialized models, we need grid and extract info
+                if model_info["type"] == "extraction" and "grid" in group.attrs:
+                    grid_name = group.attrs["grid"]
+
+                    # Load grid if needed
+                    if grid_name not in grids:
+                        if grid_path is not None:
+                            # Try different extensions
+                            for ext in [".hdf5", ".h5"]:
+                                try:
+                                    grid_file = f"{grid_path}/{grid_name}{ext}"
+                                    grids[grid_name] = Grid(grid_file)
+                                    break
+                                except FileNotFoundError:
+                                    continue
+                            else:
+                                raise FileNotFoundError(f"Grid file not found: {grid_name}")
+                        else:
+                            # Use default grid loading
+                            grids[grid_name] = Grid(grid_name)
+
+                    # Get common parameters for specialized models
+                    grid = grids[grid_name]
+                    kwargs = {
+                        "grid": grid,
+                        "label": label,
+                    }
+
+                    # Add fixed parameters
+                    kwargs.update(model_info["fixed_parameters"])
+
+                    # Create the specialized model
+                    model = specialized_class(**kwargs)
+
+                    # Add masks if present
+                    for mask in model_info["masks"]:
+                        model.add_mask(**mask)
+
+                    created_models[label] = model
+                    return model
+
+                elif model_info["type"] == "combination":
+                    # Handle specialized combination models (like TotalEmission, BimodalPacman, etc.)
+                    # These are complex models that build their own internal trees
+                    # For now, we'll need to reconstruct them using stored constructor parameters
+
+                    # Get constructor parameters if they were saved
+                    # This would require modifying to_hdf5 to save constructor parameters
+                    # For now, fall back to generic reconstruction
+                    return None
+
+                else:
+                    # For other model types, fall back to generic reconstruction
+                    return None
+
+            except (ImportError, AttributeError) as e:
+                # If we can't create the specialized class, fall back to generic
+                print(f"Warning: Could not create specialized class {class_name}: {e}")
+                return None
+
         def _create_model(label, model_info, created_models, grids):
             """Create a model and its dependencies."""
             if label in created_models:
                 return created_models[label]
-            
+
             model_type = model_info["type"]
             group = model_info["group"]
-            
-            # Create model based on type
+
+            # Check if we have class information for specialized emission models
+            if "class_name" in group.attrs and "class_module" in group.attrs:
+                class_name = group.attrs["class_name"]
+                class_module = group.attrs["class_module"]
+
+                # Handle specialized emission model classes
+                if class_name != "EmissionModel" and "emission_models" in class_module:
+                    specialized_model = _create_specialized_model(label, model_info, created_models, grids, class_name, class_module)
+                    if specialized_model is not None:
+                        return specialized_model
+                    # If specialized creation failed, fall back to generic
+
+            # Create model based on type for generic EmissionModel
             if model_type == "extraction":
                 grid_name = group.attrs["grid"]
                 extract_key = group.attrs["extract"]
-                
+
                 # Load grid if needed
                 if grid_name not in grids:
                     if grid_path is not None:
@@ -1847,7 +1949,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     else:
                         # Use default grid loading
                         grids[grid_name] = Grid(grid_name)
-                
+
                 model = cls(
                     label=label,
                     grid=grids[grid_name],
@@ -1858,107 +1960,107 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     scale_by=model_info["scale_by"],
                     **model_info["fixed_parameters"]
                 )
-                
+
             elif model_type == "combination":
                 combine_labels = list(group.attrs["combine"])
-                
+
                 # First create all child models
                 combine_models = []
                 for child_label in combine_labels:
                     if child_label in model_data:
                         child_model = _create_model(child_label, model_data[child_label], created_models, grids)
                         combine_models.append(child_model)
-                
+
                 model = cls(
                     label=label,
                     combine=combine_models,
                     emitter=model_info["emitter"],
-                    per_particle=model_info["per_particle"], 
+                    per_particle=model_info["per_particle"],
                     save=model_info["save"],
                     scale_by=model_info["scale_by"],
                     **model_info["fixed_parameters"]
                 )
-                
+
             elif model_type == "transformation":
                 transformer_type = group.attrs["transformer"]
                 apply_to_label = group.attrs["apply_to"]
-                
+
                 # First create the apply_to model
                 if apply_to_label in model_data:
                     apply_to_model = _create_model(apply_to_label, model_data[apply_to_label], created_models, grids)
                 else:
                     raise ValueError(f"Cannot find apply_to model: {apply_to_label}")
-                
+
                 # Try to reconstruct the transformer
                 transformer = _reconstruct_transformer(transformer_type, group.attrs)
-                
+
                 model = cls(
                     label=label,
                     apply_to=apply_to_model,
                     transformer=transformer,
                     emitter=model_info["emitter"],
-                    per_particle=model_info["per_particle"], 
+                    per_particle=model_info["per_particle"],
                     save=model_info["save"],
                     scale_by=model_info["scale_by"],
                     **{k: v for k, v in model_info["fixed_parameters"].items() if k not in ['dust_curve', 'transformer']}
                 )
-                
+
             elif model_type == "generation":
                 generator_type = group.attrs["generator"]
                 lum_intrinsic_label = group.attrs.get("lum_intrinsic_model", None)
                 lum_attenuated_label = group.attrs.get("lum_attenuated_model", None)
-                
+
                 # Create dependent models if they exist
                 lum_intrinsic_model = None
                 lum_attenuated_model = None
-                
+
                 if lum_intrinsic_label and lum_intrinsic_label in model_data:
                     lum_intrinsic_model = _create_model(lum_intrinsic_label, model_data[lum_intrinsic_label], created_models, grids)
-                
+
                 if lum_attenuated_label and lum_attenuated_label in model_data:
                     lum_attenuated_model = _create_model(lum_attenuated_label, model_data[lum_attenuated_label], created_models, grids)
-                
+
                 # Try to reconstruct the generator
                 generator = _reconstruct_generator(generator_type, group.attrs)
-                
+
                 model = cls(
                     label=label,
                     generator=generator,
                     lum_intrinsic_model=lum_intrinsic_model,
                     lum_attenuated_model=lum_attenuated_model,
                     emitter=model_info["emitter"],
-                    per_particle=model_info["per_particle"], 
+                    per_particle=model_info["per_particle"],
                     save=model_info["save"],
                     scale_by=model_info["scale_by"],
                     **{k: v for k, v in model_info["fixed_parameters"].items() if k not in ['generator']}
                 )
-                
+
             else:
                 raise ValueError(f"Unsupported model type: {model_type}")
-            
+
             # Add masks
             for mask in model_info["masks"]:
                 model.add_mask(**mask)
-            
+
             created_models[label] = model
             return model
-        
+
         # Find the root model (one that appears in no other model's children)
         all_children = set()
         for model_info in model_data.values():
             all_children.update(model_info["children"])
-        
+
         root_candidates = [label for label in model_data.keys() if label not in all_children]
-        
+
         if len(root_candidates) != 1:
             # If we can't determine the root, use the first model
             root_label = list(model_data.keys())[0]
         else:
             root_label = root_candidates[0]
-        
+
         # Create the root model and all its dependencies
         root_model = _create_model(root_label, model_data[root_label], created_models, grids)
-        
+
         return root_model
 
     @classmethod
@@ -1981,7 +2083,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 The root emission model with complete tree loaded.
         """
         import h5py
-        
+
         with h5py.File(file_path, "r") as f:
             return cls.from_hdf5(f, grids=grids, grid_path=grid_path)
 
