@@ -1753,6 +1753,71 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Second pass: create models in dependency order
         created_models = {}
         
+        def _reconstruct_transformer(transformer_type_str, group_attrs):
+            """Reconstruct a transformer object from its type string and attributes."""
+            # Import transformer classes here to avoid circular imports
+            try:
+                if "PowerLaw" in transformer_type_str:
+                    from synthesizer.emission_models.transformers.dust_attenuation import PowerLaw
+                    slope = group_attrs.get('transformer_slope', -1.0)
+                    return PowerLaw(slope=slope)
+                
+                elif "Calzetti2000" in transformer_type_str:
+                    from synthesizer.emission_models.transformers.dust_attenuation import Calzetti2000
+                    return Calzetti2000()
+                
+                elif "MWN18" in transformer_type_str:
+                    from synthesizer.emission_models.transformers.dust_attenuation import MWN18
+                    return MWN18()
+                
+                # Add more transformer types as needed
+                else:
+                    raise NotImplementedError(
+                        f"Transformer reconstruction not implemented for: {transformer_type_str}. "
+                        "Supported transformers: PowerLaw, Calzetti2000, MWN18."
+                    )
+            except ImportError as e:
+                raise NotImplementedError(
+                    f"Could not import transformer {transformer_type_str}: {e}"
+                )
+        
+        def _reconstruct_generator(generator_type_str, group_attrs):
+            """Reconstruct a generator object from its type string and attributes."""
+            try:
+                if "Blackbody" in generator_type_str:
+                    from synthesizer.emission_models.dust.emission import Blackbody
+                    temperature = None
+                    if 'generator_temperature' in group_attrs:
+                        from unyt import unyt_quantity
+                        temp_value = group_attrs['generator_temperature']
+                        temp_units = group_attrs.get('generator_temperature_units', 'K')
+                        temperature = unyt_quantity(temp_value, temp_units)
+                    cmb_factor = group_attrs.get('generator_cmb_factor', 1.0)
+                    return Blackbody(temperature=temperature, cmb_factor=cmb_factor)
+                
+                elif "Greybody" in generator_type_str:
+                    from synthesizer.emission_models.dust.emission import Greybody
+                    temperature = None
+                    if 'generator_temperature' in group_attrs:
+                        from unyt import unyt_quantity
+                        temp_value = group_attrs['generator_temperature']
+                        temp_units = group_attrs.get('generator_temperature_units', 'K')
+                        temperature = unyt_quantity(temp_value, temp_units)
+                    emissivity = group_attrs.get('generator_emissivity', 1.5)
+                    cmb_factor = group_attrs.get('generator_cmb_factor', 1.0)
+                    return Greybody(temperature=temperature, emissivity=emissivity, cmb_factor=cmb_factor)
+                
+                # Add more generator types as needed  
+                else:
+                    raise NotImplementedError(
+                        f"Generator reconstruction not implemented for: {generator_type_str}. "
+                        "Supported generators: Blackbody, Greybody."
+                    )
+            except ImportError as e:
+                raise NotImplementedError(
+                    f"Could not import generator {generator_type_str}: {e}"
+                )
+        
         def _create_model(label, model_info, created_models, grids):
             """Create a model and its dependencies."""
             if label in created_models:
@@ -1812,6 +1877,60 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     save=model_info["save"],
                     scale_by=model_info["scale_by"],
                     **model_info["fixed_parameters"]
+                )
+                
+            elif model_type == "transformation":
+                transformer_type = group.attrs["transformer"]
+                apply_to_label = group.attrs["apply_to"]
+                
+                # First create the apply_to model
+                if apply_to_label in model_data:
+                    apply_to_model = _create_model(apply_to_label, model_data[apply_to_label], created_models, grids)
+                else:
+                    raise ValueError(f"Cannot find apply_to model: {apply_to_label}")
+                
+                # Try to reconstruct the transformer
+                transformer = _reconstruct_transformer(transformer_type, group.attrs)
+                
+                model = cls(
+                    label=label,
+                    apply_to=apply_to_model,
+                    transformer=transformer,
+                    emitter=model_info["emitter"],
+                    per_particle=model_info["per_particle"], 
+                    save=model_info["save"],
+                    scale_by=model_info["scale_by"],
+                    **{k: v for k, v in model_info["fixed_parameters"].items() if k not in ['dust_curve', 'transformer']}
+                )
+                
+            elif model_type == "generation":
+                generator_type = group.attrs["generator"]
+                lum_intrinsic_label = group.attrs.get("lum_intrinsic_model", None)
+                lum_attenuated_label = group.attrs.get("lum_attenuated_model", None)
+                
+                # Create dependent models if they exist
+                lum_intrinsic_model = None
+                lum_attenuated_model = None
+                
+                if lum_intrinsic_label and lum_intrinsic_label in model_data:
+                    lum_intrinsic_model = _create_model(lum_intrinsic_label, model_data[lum_intrinsic_label], created_models, grids)
+                
+                if lum_attenuated_label and lum_attenuated_label in model_data:
+                    lum_attenuated_model = _create_model(lum_attenuated_label, model_data[lum_attenuated_label], created_models, grids)
+                
+                # Try to reconstruct the generator
+                generator = _reconstruct_generator(generator_type, group.attrs)
+                
+                model = cls(
+                    label=label,
+                    generator=generator,
+                    lum_intrinsic_model=lum_intrinsic_model,
+                    lum_attenuated_model=lum_attenuated_model,
+                    emitter=model_info["emitter"],
+                    per_particle=model_info["per_particle"], 
+                    save=model_info["save"],
+                    scale_by=model_info["scale_by"],
+                    **{k: v for k, v in model_info["fixed_parameters"].items() if k not in ['generator']}
                 )
                 
             else:

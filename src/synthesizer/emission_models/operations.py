@@ -614,8 +614,19 @@ class Generation:
         # Flag it's generation
         group.attrs["type"] = "generation"
 
-        # Save the generator
-        group.attrs["generator"] = str(type(self._generator))
+        # Save the generator type and parameters
+        generator_type = str(type(self._generator))
+        group.attrs["generator"] = generator_type
+        
+        # Save generator-specific parameters
+        if hasattr(self._generator, 'temperature'):
+            if self._generator.temperature is not None:
+                group.attrs["generator_temperature"] = float(self._generator.temperature.value)
+                group.attrs["generator_temperature_units"] = str(self._generator.temperature.units)
+        if hasattr(self._generator, 'emissivity'):
+            group.attrs["generator_emissivity"] = self._generator.emissivity
+        if hasattr(self._generator, 'cmb_factor'):
+            group.attrs["generator_cmb_factor"] = self._generator.cmb_factor
 
         # Save the dust luminosity models
         if self._lum_intrinsic_model is not None:
@@ -768,8 +779,19 @@ class Transformation:
         # Flag it's dust attenuation
         group.attrs["type"] = "transformation"
 
-        # Save the dust curve
-        group.attrs["transformer"] = str(type(self._transformer))
+        # Save the dust curve type and parameters
+        transformer_type = str(type(self._transformer))
+        group.attrs["transformer"] = transformer_type
+
+        # Save transformer-specific parameters
+        if hasattr(self._transformer, 'slope'):
+            group.attrs["transformer_slope"] = self._transformer.slope
+        if hasattr(self._transformer, 'emissivity'):
+            group.attrs["transformer_emissivity"] = self._transformer.emissivity
+        if hasattr(self._transformer, 'temperature'):
+            if self._transformer.temperature is not None:
+                group.attrs["transformer_temperature"] = float(self._transformer.temperature.value)
+                group.attrs["transformer_temperature_units"] = str(self._transformer.temperature.units)
 
         # Save the model to apply the dust curve to
         group.attrs["apply_to"] = self._apply_to.label
