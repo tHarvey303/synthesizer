@@ -1508,58 +1508,93 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         """
         self.fixed_parameters.update(kwargs)
 
-    def to_hdf5(self, group):
-        """Save the model to an HDF5 group.
+
+
+    def extract_to_hdf5(self, group):
+        """Save extraction-specific attributes to HDF5.
 
         Args:
-            group (h5py.Group):
-                The group to save the model to.
+            group (h5py.Group): The HDF5 group to save to.
         """
-        # First off call the operation to save operation specific attributes
-        # to the group
-        if self._is_extracting:
-            self.extract_to_hdf5(group)
-        elif self._is_combining:
-            self.combine_to_hdf5(group)
-        elif self._is_transforming:
-            self.transformation_to_hdf5(group)
-        elif self._is_dust_emitting:
-            self.generate_to_hdf5(group)
-        elif self._is_generating:
-            self.generate_to_hdf5(group)
+        group.attrs["type"] = "extraction"
+        group.attrs["grid"] = self.grid.grid_name
+        group.attrs["extract"] = self.extract
 
-        # Save the model attributes
-        group.attrs["label"] = self.label
-        group.attrs["emitter"] = self.emitter
-        group.attrs["per_particle"] = self.per_particle
-        group.attrs["save"] = self.save
-        group.attrs["scale_by"] = self.scale_by
-        group.attrs["post_processing"] = (
-            [func.__name__ for func in self.post_processing]
-            if len(self._post_processing) > 0
-            else "None"
-        )
+    def combine_to_hdf5(self, group):
+        """Save combination-specific attributes to HDF5.
 
-        # Save the masks
-        if len(self.masks) > 0:
-            masks = group.create_group("Masks")
-            for ind, mask in enumerate(self.masks):
-                mask_group = masks.create_group(f"mask_{ind}")
-                mask_group.attrs["attr"] = mask["attr"]
-                mask_group.attrs["op"] = mask["op"]
-                mask_group.attrs["thresh"] = mask["thresh"]
+        Args:
+            group (h5py.Group): The HDF5 group to save to.
+        """
+        group.attrs["type"] = "combination"
+        group.attrs["combine"] = [model.label for model in self.combine]
 
-        # Save the fixed parameters
-        if len(self.fixed_parameters) > 0:
-            fixed_parameters = group.create_group("FixedParameters")
-            for key, value in self.fixed_parameters.items():
-                fixed_parameters.attrs[key] = value
+    def transformation_to_hdf5(self, group):
+        """Save transformation-specific attributes to HDF5.
 
-        # Save the children
-        if len(self._children) > 0:
-            group.create_dataset(
-                "Children",
-                data=[child.label.encode("utf-8") for child in self._children],
+        Args:
+            group (h5py.Group): The HDF5 group to save to.
+        """
+        group.attrs["type"] = "transformation"
+        group.attrs["transformer"] = str(type(self.transformer))
+        group.attrs["apply_to"] = self.apply_to.label
+
+        # Save transformer-specific parameters
+        transformer = self.transformer
+
+        # Save parameters based on transformer type
+        if hasattr(transformer, 'slope'):
+            group.attrs["transformer_slope"] = transformer.slope
+        if hasattr(transformer, 'fesc_attrs'):
+            group.attrs["transformer_fesc_attrs"] = transformer.fesc_attrs
+        if hasattr(transformer, 'covering_attrs'):
+            group.attrs["transformer_covering_attrs"] = (
+                transformer.covering_attrs
+            )
+        if hasattr(transformer, 'redshift'):
+            group.attrs["transformer_redshift"] = transformer.redshift
+
+    def generate_to_hdf5(self, group):
+        """Save generation-specific attributes to HDF5.
+
+        Args:
+            group (h5py.Group): The HDF5 group to save to.
+        """
+        group.attrs["type"] = "generation"
+        group.attrs["generator"] = str(type(self.generator))
+
+        # Save generator-specific parameters
+        generator = self.generator
+
+        # Save temperature and units if available
+        if hasattr(generator, 'temperature') and (
+            generator.temperature is not None
+        ):
+            group.attrs["generator_temperature"] = float(
+                generator.temperature.value
+            )
+            group.attrs["generator_temperature_units"] = str(
+                generator.temperature.units
+            )
+
+        # Save other generator parameters
+        if hasattr(generator, 'emissivity'):
+            group.attrs["generator_emissivity"] = generator.emissivity
+        if hasattr(generator, 'cmb_factor'):
+            group.attrs["generator_cmb_factor"] = generator.cmb_factor
+
+        # Save generator dependencies if they exist
+        if hasattr(self, 'lum_intrinsic_model') and (
+            self.lum_intrinsic_model is not None
+        ):
+            group.attrs["lum_intrinsic_model"] = (
+                self.lum_intrinsic_model.label
+            )
+        if hasattr(self, 'lum_attenuated_model') and (
+            self.lum_attenuated_model is not None
+        ):
+            group.attrs["lum_attenuated_model"] = (
+                self.lum_attenuated_model.label
             )
 
     def to_hdf5(self, group):
@@ -1771,28 +1806,38 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             try:
                 # Dust attenuation transformers
                 if "PowerLaw" in transformer_type_str:
-                    from synthesizer.emission_models.transformers.dust_attenuation import PowerLaw  # noqa: E501
+                    from synthesizer.emission_models.transformers.dust_attenuation import (
+                        PowerLaw,  # noqa: E501
+                    )
 
                     slope = group_attrs.get('transformer_slope', -1.0)
                     return PowerLaw(slope=slope)
 
                 elif "Calzetti2000" in transformer_type_str:
-                    from synthesizer.emission_models.transformers.dust_attenuation import Calzetti2000  # noqa: E501
+                    from synthesizer.emission_models.transformers.dust_attenuation import (
+                        Calzetti2000,  # noqa: E501
+                    )
 
                     return Calzetti2000()
 
                 elif "MWN18" in transformer_type_str:
-                    from synthesizer.emission_models.transformers.dust_attenuation import MWN18  # noqa: E501
+                    from synthesizer.emission_models.transformers.dust_attenuation import (
+                        MWN18,  # noqa: E501
+                    )
 
                     return MWN18()
 
                 elif "GrainsWD01" in transformer_type_str:
-                    from synthesizer.emission_models.transformers.dust_attenuation import GrainsWD01  # noqa: E501
+                    from synthesizer.emission_models.transformers.dust_attenuation import (
+                        GrainsWD01,  # noqa: E501
+                    )
 
                     return GrainsWD01()
 
                 elif "ParametricLi08" in transformer_type_str:
-                    from synthesizer.emission_models.transformers.dust_attenuation import ParametricLi08  # noqa: E501
+                    from synthesizer.emission_models.transformers.dust_attenuation import (
+                        ParametricLi08,  # noqa: E501
+                    )
 
                     # Extract parameters if available
                     slope = group_attrs.get('transformer_slope', -1.0)
@@ -1800,7 +1845,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
                 # Escape fraction transformers
                 elif "EscapedFraction" in transformer_type_str:
-                    from synthesizer.emission_models.transformers.escape_fraction import EscapedFraction  # noqa: E501
+                    from synthesizer.emission_models.transformers.escape_fraction import (
+                        EscapedFraction,  # noqa: E501
+                    )
 
                     fesc_attrs = group_attrs.get('transformer_fesc_attrs', ("fesc",))
                     if isinstance(fesc_attrs, str):
@@ -1808,7 +1855,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     return EscapedFraction(fesc_attrs=fesc_attrs)
 
                 elif "ProcessedFraction" in transformer_type_str:
-                    from synthesizer.emission_models.transformers.escape_fraction import ProcessedFraction  # noqa: E501
+                    from synthesizer.emission_models.transformers.escape_fraction import (
+                        ProcessedFraction,  # noqa: E501
+                    )
 
                     fesc_attrs = group_attrs.get('transformer_fesc_attrs', ("fesc",))
                     if isinstance(fesc_attrs, str):
@@ -1816,7 +1865,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     return ProcessedFraction(fesc_attrs=fesc_attrs)
 
                 elif "CoveringFraction" in transformer_type_str:
-                    from synthesizer.emission_models.transformers.escape_fraction import CoveringFraction  # noqa: E501
+                    from synthesizer.emission_models.transformers.escape_fraction import (
+                        CoveringFraction,  # noqa: E501
+                    )
 
                     covering_attrs = group_attrs.get('transformer_covering_attrs', ("covering_fraction",))
                     if isinstance(covering_attrs, str):
@@ -1824,7 +1875,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     return CoveringFraction(covering_attrs=covering_attrs)
 
                 elif "EscapingFraction" in transformer_type_str:
-                    from synthesizer.emission_models.transformers.escape_fraction import EscapingFraction  # noqa: E501
+                    from synthesizer.emission_models.transformers.escape_fraction import (
+                        EscapingFraction,  # noqa: E501
+                    )
 
                     covering_attrs = group_attrs.get('transformer_covering_attrs', ("covering_fraction",))
                     if isinstance(covering_attrs, str):
@@ -1833,13 +1886,17 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
                 # IGM transformers
                 elif "Madau96" in transformer_type_str:
-                    from synthesizer.emission_models.transformers.igm import Madau96  # noqa: E501
+                    from synthesizer.emission_models.transformers.igm import (
+                        Madau96,  # noqa: E501
+                    )
 
                     redshift = group_attrs.get('transformer_redshift', 0.0)
                     return Madau96(redshift=redshift)
 
                 elif "Inoue14" in transformer_type_str:
-                    from synthesizer.emission_models.transformers.igm import Inoue14  # noqa: E501
+                    from synthesizer.emission_models.transformers.igm import (
+                        Inoue14,  # noqa: E501
+                    )
 
                     redshift = group_attrs.get('transformer_redshift', 0.0)
                     return Inoue14(redshift=redshift)
@@ -1957,10 +2014,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 elif model_info["type"] == "combination":
                     # Handle specialized combination models (like NebularEmission, BimodalPacman, etc.)
                     # These are complex models that build their own internal trees
-                    
+
                     # Check if this is a root-level specialized model based on class name
                     if any(cls in class_name for cls in [
-                        'NebularEmission', 'TransmittedEmission', 'ReprocessedEmission', 
+                        'NebularEmission', 'TransmittedEmission', 'ReprocessedEmission',
                         'IntrinsicEmission', 'PacmanEmission', 'BimodalPacmanEmission'
                     ]):
                         # For these models, we need to identify their constructor parameters
@@ -1968,7 +2025,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         # For now, fall back to generic reconstruction which should work
                         # since it preserves the relationships between models
                         return None
-                    
+
                     # For simpler combination models, fall back to generic reconstruction
                     return None
 
@@ -1976,7 +2033,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     # For other model types, fall back to generic reconstruction
                     return None
 
-            except (ImportError, AttributeError, TypeError) as e:
+            except (ImportError, AttributeError, TypeError):
                 # If we can't create the specialized class, fall back to generic
                 # Don't print warning here to avoid spamming console
                 return None
@@ -2060,12 +2117,20 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
                 # First create the apply_to model
                 if apply_to_label in model_data:
-                    apply_to_model = _create_model(apply_to_label, model_data[apply_to_label], created_models, grids)
+                    apply_to_model = _create_model(
+                        apply_to_label,
+                        model_data[apply_to_label],
+                        created_models,
+                        grids
+                    )
                 else:
                     raise ValueError(f"Cannot find apply_to model: {apply_to_label}")
 
                 # Try to reconstruct the transformer
-                transformer = _reconstruct_transformer(transformer_type, group.attrs)
+                transformer = _reconstruct_transformer(
+                    transformer_type,
+                    group.attrs
+                )
 
                 model = cls(
                     label=label,
@@ -2075,23 +2140,42 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     per_particle=model_info["per_particle"],
                     save=model_info["save"],
                     scale_by=model_info["scale_by"],
-                    **{k: v for k, v in model_info["fixed_parameters"].items() if k not in ['dust_curve', 'transformer']}
+                    **{
+                        k: v for k, v in model_info["fixed_parameters"].items()
+                        if k not in ['dust_curve', 'transformer']
+                    }
                 )
 
             elif model_type == "generation":
                 generator_type = group.attrs["generator"]
-                lum_intrinsic_label = group.attrs.get("lum_intrinsic_model", None)
-                lum_attenuated_label = group.attrs.get("lum_attenuated_model", None)
+                lum_intrinsic_label = group.attrs.get(
+                    "lum_intrinsic_model",
+                    None
+                )
+                lum_attenuated_label = group.attrs.get(
+                    "lum_attenuated_model",
+                    None
+                )
 
                 # Create dependent models if they exist
                 lum_intrinsic_model = None
                 lum_attenuated_model = None
 
                 if lum_intrinsic_label and lum_intrinsic_label in model_data:
-                    lum_intrinsic_model = _create_model(lum_intrinsic_label, model_data[lum_intrinsic_label], created_models, grids)
+                    lum_intrinsic_model = _create_model(
+                        lum_intrinsic_label,
+                        model_data[lum_intrinsic_label],
+                        created_models,
+                        grids
+                    )
 
                 if lum_attenuated_label and lum_attenuated_label in model_data:
-                    lum_attenuated_model = _create_model(lum_attenuated_label, model_data[lum_attenuated_label], created_models, grids)
+                    lum_attenuated_model = _create_model(
+                        lum_attenuated_label,
+                        model_data[lum_attenuated_label],
+                        created_models,
+                        grids
+                    )
 
                 # Try to reconstruct the generator
                 generator = _reconstruct_generator(generator_type, group.attrs)
@@ -2105,7 +2189,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     per_particle=model_info["per_particle"],
                     save=model_info["save"],
                     scale_by=model_info["scale_by"],
-                    **{k: v for k, v in model_info["fixed_parameters"].items() if k not in ['generator']}
+                    **{
+                        k: v for k, v in model_info["fixed_parameters"].items()
+                        if k not in ['generator']
+                    }
                 )
 
             else:
@@ -2123,7 +2210,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         for model_info in model_data.values():
             all_children.update(model_info["children"])
 
-        root_candidates = [label for label in model_data.keys() if label not in all_children]
+        root_candidates = [
+            label for label in model_data.keys()
+            if label not in all_children
+        ]
 
         if len(root_candidates) != 1:
             # If we can't determine the root, use the first model
@@ -2132,17 +2222,22 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             root_label = root_candidates[0]
 
         # Create the root model and all its dependencies
-        root_model = _create_model(root_label, model_data[root_label], created_models, grids)
+        root_model = _create_model(
+            root_label,
+            model_data[root_label],
+            created_models,
+            grids
+        )
 
         return root_model
 
     @classmethod
     def load_tree_from_hdf5(cls, file_path, grids=None, grid_path=None):
         """Load a complete emission model tree from an HDF5 file.
-        
+
         This is a convenience method for loading models saved with
         save_tree_to_hdf5().
-        
+
         Args:
             file_path (str):
                 Path to the HDF5 file containing the model tree.
@@ -2150,7 +2245,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 Dictionary of pre-loaded Grid objects keyed by grid name.
             grid_path (str, optional):
                 Path to directory containing grid files.
-                
+
         Returns:
             EmissionModel:
                 The root emission model with complete tree loaded.
