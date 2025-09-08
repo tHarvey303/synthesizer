@@ -1948,23 +1948,37 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     created_models[label] = model
                     return model
 
-                elif model_info["type"] == "combination":
-                    # Handle specialized combination models (like TotalEmission, BimodalPacman, etc.)
-                    # These are complex models that build their own internal trees
-                    # For now, we'll need to reconstruct them using stored constructor parameters
-
-                    # Get constructor parameters if they were saved
-                    # This would require modifying to_hdf5 to save constructor parameters
+                elif model_info["type"] == "transformation":
+                    # For specialized transformation models, we need to handle them differently
+                    # These are complex models that create internal transformations
                     # For now, fall back to generic reconstruction
+                    return None
+
+                elif model_info["type"] == "combination":
+                    # Handle specialized combination models (like NebularEmission, BimodalPacman, etc.)
+                    # These are complex models that build their own internal trees
+                    
+                    # Check if this is a root-level specialized model based on class name
+                    if any(cls in class_name for cls in [
+                        'NebularEmission', 'TransmittedEmission', 'ReprocessedEmission', 
+                        'IntrinsicEmission', 'PacmanEmission', 'BimodalPacmanEmission'
+                    ]):
+                        # For these models, we need to identify their constructor parameters
+                        # This is challenging because they create complex internal structures
+                        # For now, fall back to generic reconstruction which should work
+                        # since it preserves the relationships between models
+                        return None
+                    
+                    # For simpler combination models, fall back to generic reconstruction
                     return None
 
                 else:
                     # For other model types, fall back to generic reconstruction
                     return None
 
-            except (ImportError, AttributeError) as e:
+            except (ImportError, AttributeError, TypeError) as e:
                 # If we can't create the specialized class, fall back to generic
-                print(f"Warning: Could not create specialized class {class_name}: {e}")
+                # Don't print warning here to avoid spamming console
                 return None
 
         def _create_model(label, model_info, created_models, grids):
