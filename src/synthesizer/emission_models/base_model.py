@@ -1934,12 +1934,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 )
                 
             else:
-                # For transformation and generation, we need to implement more complex
-                # reconstruction of transformers and generators. For now, raise an error.
-                raise NotImplementedError(
-                    f"Loading {model_type} models from HDF5 is not yet fully implemented. "
-                    "Currently only extraction and combination models are supported."
-                )
+                raise ValueError(f"Unsupported model type: {model_type}")
             
             # Add masks
             for mask in model_info["masks"]:

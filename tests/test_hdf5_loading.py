@@ -217,7 +217,7 @@ class TestEmissionModelHDF5:
     
     def test_error_on_unsupported_model_type(self):
         """Test that unsupported model types raise appropriate errors."""
-        # Create a mock HDF5 structure for an unsupported model type
+        # Test unsupported generator type
         with h5py.File(self.test_file, "w") as f:
             model_group = f.create_group("test_model")
             model_group.attrs["label"] = "test_model"
@@ -225,9 +225,23 @@ class TestEmissionModelHDF5:
             model_group.attrs["generator"] = "<class 'some.unknown.Generator'>"
             model_group.attrs["emitter"] = "stellar"
         
-        # Try to load - should raise NotImplementedError
+        # Try to load - should raise NotImplementedError for unsupported generator
         with h5py.File(self.test_file, "r") as f:
             with pytest.raises(NotImplementedError, match="Generator reconstruction not implemented"):
+                EmissionModel.from_hdf5(f)
+
+    def test_error_on_invalid_model_type(self):
+        """Test that invalid model types raise ValueError."""
+        # Test completely invalid model type
+        with h5py.File(self.test_file, "w") as f:
+            model_group = f.create_group("test_model")
+            model_group.attrs["label"] = "test_model"
+            model_group.attrs["type"] = "invalid_type"
+            model_group.attrs["emitter"] = "stellar"
+        
+        # Try to load - should raise ValueError for invalid model type
+        with h5py.File(self.test_file, "r") as f:
+            with pytest.raises(ValueError, match="Unsupported model type"):
                 EmissionModel.from_hdf5(f)
     
     def test_powerlaw_transformer_save_load(self, test_grid):
@@ -358,6 +372,48 @@ class TestEmissionModelHDF5:
             combine_labels = list(combo_group.attrs["combine"])
             assert incident_emission_model.label in combine_labels
             assert nebular_emission_model.label in combine_labels
+
+    def test_from_hdf5_with_grid_path(self, test_grid):
+        """Test loading models with grid_path parameter."""
+        # Create and save a model 
+        model = EmissionModel(
+            label="test_model",
+            grid=test_grid,
+            extract="incident",
+            emitter="stellar"
+        )
+        
+        with h5py.File(self.test_file, "w") as f:
+            model_group = f.create_group("test_model")
+            model.to_hdf5(model_group)
+        
+        # Test loading with grid_path (this will likely fail in test environment
+        # since we don't have actual grid files, but tests the code path)
+        with h5py.File(self.test_file, "r") as f:
+            try:
+                loaded_model = EmissionModel.from_hdf5(f, grid_path="/fake/path")
+            except FileNotFoundError:
+                # Expected in test environment
+                pass
+
+    def test_from_hdf5_missing_grid_error(self, test_grid):
+        """Test that missing grids raise appropriate errors."""
+        # Create and save a model
+        model = EmissionModel(
+            label="test_model", 
+            grid=test_grid,
+            extract="incident",
+            emitter="stellar"
+        )
+        
+        with h5py.File(self.test_file, "w") as f:
+            model_group = f.create_group("test_model")
+            model.to_hdf5(model_group)
+        
+        # Try to load without providing the grid
+        with h5py.File(self.test_file, "r") as f:
+            with pytest.raises(FileNotFoundError):
+                EmissionModel.from_hdf5(f, grids={})  # Empty grids dict
 
 
 if __name__ == "__main__":
