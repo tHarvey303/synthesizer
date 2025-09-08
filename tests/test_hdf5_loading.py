@@ -8,24 +8,6 @@ import numpy as np
 from unyt import K, Myr
 
 from synthesizer.emission_models.base_model import EmissionModel
-from synthesizer.grid import Grid
-
-
-class MockGrid:
-    """Mock grid class for testing without needing actual grid files."""
-    
-    def __init__(self, grid_name="test_grid"):
-        self.grid_name = grid_name
-        self.available_emissions = ["incident", "transmitted", "nebular"]
-        self.lam = np.logspace(2, 5, 1000)  # Wavelength array
-        
-    def __getattr__(self, name):
-        # Return mock values for any grid attribute
-        if name == "available_spectra_emissions":
-            return self.available_emissions
-        elif name == "available_line_emissions":
-            return []
-        return None
 
 
 class TestEmissionModelHDF5:
@@ -35,9 +17,6 @@ class TestEmissionModelHDF5:
         """Set up test fixtures."""
         self.temp_dir = tempfile.mkdtemp()
         self.test_file = os.path.join(self.temp_dir, "test_model.h5")
-        
-        # Create a mock grid
-        self.mock_grid = MockGrid("test_grid")
     
     def teardown_method(self):
         """Clean up test fixtures."""
@@ -45,12 +24,12 @@ class TestEmissionModelHDF5:
             os.remove(self.test_file)
         os.rmdir(self.temp_dir)
     
-    def test_simple_extraction_model_save_load(self):
+    def test_simple_extraction_model_save_load(self, test_grid):
         """Test saving and loading a simple extraction model."""
         # Create a simple extraction model
         model = EmissionModel(
             label="test_extraction",
-            grid=self.mock_grid,
+            grid=test_grid,
             extract="incident",
             emitter="stellar"
         )
@@ -68,23 +47,23 @@ class TestEmissionModelHDF5:
             # Check basic attributes
             assert model_group.attrs["label"] == "test_extraction"
             assert model_group.attrs["type"] == "extraction"
-            assert model_group.attrs["grid"] == "test_grid"
+            assert model_group.attrs["grid"] == test_grid.grid_name
             assert model_group.attrs["extract"] == "incident"
             assert model_group.attrs["emitter"] == "stellar"
     
-    def test_combination_model_save_load(self):
+    def test_combination_model_save_load(self, test_grid):
         """Test saving and loading a combination model."""
         # Create two extraction models
         model1 = EmissionModel(
             label="stellar",
-            grid=self.mock_grid,
+            grid=test_grid,
             extract="incident",
             emitter="stellar"
         )
         
         model2 = EmissionModel(
             label="nebular", 
-            grid=self.mock_grid,
+            grid=test_grid,
             extract="nebular",
             emitter="stellar"
         )
@@ -112,11 +91,11 @@ class TestEmissionModelHDF5:
             assert combo_group.attrs["type"] == "combination"
             assert list(combo_group.attrs["combine"]) == ["stellar", "nebular"]
     
-    def test_model_with_masks_save_load(self):
+    def test_model_with_masks_save_load(self, test_grid):
         """Test saving and loading a model with masks."""
         model = EmissionModel(
             label="masked_model",
-            grid=self.mock_grid,
+            grid=test_grid,
             extract="incident",
             emitter="stellar",
             mask_attr="age",
@@ -142,11 +121,11 @@ class TestEmissionModelHDF5:
             assert mask_group.attrs["thresh"] == 100
             assert mask_group.attrs["thresh_units"] == "Myr"
     
-    def test_model_with_fixed_parameters_save_load(self):
+    def test_model_with_fixed_parameters_save_load(self, test_grid):
         """Test saving and loading a model with fixed parameters."""
         model = EmissionModel(
             label="fixed_param_model",
-            grid=self.mock_grid,
+            grid=test_grid,
             extract="incident",
             emitter="stellar",
             tau_v=0.5,
@@ -166,12 +145,12 @@ class TestEmissionModelHDF5:
             assert fixed_params.attrs["tau_v"] == 0.5
             assert fixed_params.attrs["fesc"] == 0.1
     
-    def test_from_hdf5_extraction_model_basic(self):
+    def test_from_hdf5_extraction_model_basic(self, test_grid):
         """Test basic loading of extraction model with from_hdf5."""
         # Create and save a model
         original_model = EmissionModel(
             label="test_model",
-            grid=self.mock_grid,
+            grid=test_grid,
             extract="incident",
             emitter="stellar",
             per_particle=True,
@@ -183,7 +162,7 @@ class TestEmissionModelHDF5:
             original_model.to_hdf5(model_group)
         
         # Load the model back
-        grids = {"test_grid": self.mock_grid}
+        grids = {test_grid.grid_name: test_grid}
         with h5py.File(self.test_file, "r") as f:
             loaded_model = EmissionModel.from_hdf5(f, grids=grids)
         
@@ -195,19 +174,19 @@ class TestEmissionModelHDF5:
         assert loaded_model._is_extracting == True
         assert loaded_model.extract == "incident"
     
-    def test_from_hdf5_combination_model_basic(self):
+    def test_from_hdf5_combination_model_basic(self, test_grid):
         """Test basic loading of combination model with from_hdf5."""
         # Create extraction models
         model1 = EmissionModel(
             label="model1",
-            grid=self.mock_grid,
+            grid=test_grid,
             extract="incident", 
             emitter="stellar"
         )
         
         model2 = EmissionModel(
             label="model2",
-            grid=self.mock_grid,
+            grid=test_grid,
             extract="nebular",
             emitter="stellar"
         )
@@ -223,7 +202,7 @@ class TestEmissionModelHDF5:
         combo_model.save_tree_to_hdf5(self.test_file)
         
         # Load back
-        grids = {"test_grid": self.mock_grid}
+        grids = {test_grid.grid_name: test_grid}
         loaded_model = EmissionModel.load_tree_from_hdf5(self.test_file, grids=grids)
         
         # Verify structure
@@ -251,7 +230,7 @@ class TestEmissionModelHDF5:
             with pytest.raises(NotImplementedError, match="Generator reconstruction not implemented"):
                 EmissionModel.from_hdf5(f)
     
-    def test_powerlaw_transformer_save_load(self):
+    def test_powerlaw_transformer_save_load(self, test_grid):
         """Test saving and loading models with PowerLaw transformers."""
         # This test would require the actual PowerLaw class, so we'll mock the structure
         with h5py.File(self.test_file, "w") as f:
@@ -259,7 +238,7 @@ class TestEmissionModelHDF5:
             base_group = f.create_group("base")
             base_group.attrs["label"] = "base"
             base_group.attrs["type"] = "extraction"
-            base_group.attrs["grid"] = "test_grid"
+            base_group.attrs["grid"] = test_grid.grid_name
             base_group.attrs["extract"] = "incident"
             base_group.attrs["emitter"] = "stellar"
             
@@ -279,7 +258,7 @@ class TestEmissionModelHDF5:
             assert transform_group.attrs["transformer_slope"] == -1.5
             assert transform_group.attrs["apply_to"] == "base"
     
-    def test_blackbody_generator_save_load(self):
+    def test_blackbody_generator_save_load(self, test_grid):
         """Test saving and loading models with Blackbody generators."""
         # This test would require the actual classes, so we'll mock the structure
         with h5py.File(self.test_file, "w") as f:
@@ -300,6 +279,85 @@ class TestEmissionModelHDF5:
             assert gen_group.attrs["generator_temperature"] == 20.0
             assert gen_group.attrs["generator_temperature_units"] == "K"
             assert gen_group.attrs["generator_cmb_factor"] == 1.0
+
+    def test_incident_emission_model_save_load(self, incident_emission_model, test_grid):
+        """Test saving and loading using the incident_emission_model fixture."""
+        # Save the model to HDF5
+        with h5py.File(self.test_file, "w") as f:
+            model_group = f.create_group("incident_model")
+            incident_emission_model.to_hdf5(model_group)
+        
+        # Verify the saved structure
+        with h5py.File(self.test_file, "r") as f:
+            model_group = f["incident_model"]
+            assert model_group.attrs["label"] == incident_emission_model.label
+            assert model_group.attrs["type"] == "extraction"
+            assert model_group.attrs["emitter"] == incident_emission_model.emitter
+
+    def test_nebular_emission_model_save_load(self, nebular_emission_model, test_grid):
+        """Test saving and loading using the nebular_emission_model fixture."""
+        # Save the model to HDF5
+        with h5py.File(self.test_file, "w") as f:
+            model_group = f.create_group("nebular_model")
+            nebular_emission_model.to_hdf5(model_group)
+        
+        # Verify the saved structure
+        with h5py.File(self.test_file, "r") as f:
+            model_group = f["nebular_model"]
+            assert model_group.attrs["label"] == nebular_emission_model.label
+            assert model_group.attrs["emitter"] == nebular_emission_model.emitter
+
+    def test_transmitted_emission_model_save_load(self, transmitted_emission_model, test_grid):
+        """Test saving and loading using the transmitted_emission_model fixture."""
+        # Save the model to HDF5
+        with h5py.File(self.test_file, "w") as f:
+            model_group = f.create_group("transmitted_model")
+            transmitted_emission_model.to_hdf5(model_group)
+        
+        # Verify the saved structure
+        with h5py.File(self.test_file, "r") as f:
+            model_group = f["transmitted_model"]
+            assert model_group.attrs["label"] == transmitted_emission_model.label
+            assert model_group.attrs["emitter"] == transmitted_emission_model.emitter
+
+    def test_reprocessed_emission_model_save_load(self, reprocessed_emission_model, test_grid):
+        """Test saving and loading using the reprocessed_emission_model fixture."""
+        # Save the model to HDF5
+        with h5py.File(self.test_file, "w") as f:
+            model_group = f.create_group("reprocessed_model")
+            reprocessed_emission_model.to_hdf5(model_group)
+        
+        # Verify the saved structure
+        with h5py.File(self.test_file, "r") as f:
+            model_group = f["reprocessed_model"]
+            assert model_group.attrs["label"] == reprocessed_emission_model.label
+            assert model_group.attrs["emitter"] == reprocessed_emission_model.emitter
+
+    def test_combination_with_preconfigured_models(self, incident_emission_model, nebular_emission_model, test_grid):
+        """Test saving and loading a combination of preconfigured emission models."""
+        # Create a combination model using the preconfigured fixtures
+        combo_model = EmissionModel(
+            label="combined_preconfigured",
+            combine=[incident_emission_model, nebular_emission_model],
+            emitter="stellar"
+        )
+        
+        # Save the tree to HDF5
+        combo_model.save_tree_to_hdf5(self.test_file)
+        
+        # Verify file structure
+        with h5py.File(self.test_file, "r") as f:
+            assert f.attrs["root_model"] == "combined_preconfigured"
+            assert "combined_preconfigured" in f
+            
+            # Check combination model attributes
+            combo_group = f["combined_preconfigured"]
+            assert combo_group.attrs["label"] == "combined_preconfigured"
+            assert combo_group.attrs["type"] == "combination"
+            # The combine attribute should contain the labels of the child models
+            combine_labels = list(combo_group.attrs["combine"])
+            assert incident_emission_model.label in combine_labels
+            assert nebular_emission_model.label in combine_labels
 
 
 if __name__ == "__main__":
