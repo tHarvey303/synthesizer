@@ -2014,19 +2014,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 elif model_info["type"] == "combination":
                     # Handle specialized combination models (like NebularEmission, BimodalPacman, etc.)
                     # These are complex models that build their own internal trees
-
-                    # Check if this is a root-level specialized model based on class name
-                    if any(cls in class_name for cls in [
-                        'NebularEmission', 'TransmittedEmission', 'ReprocessedEmission',
-                        'IntrinsicEmission', 'PacmanEmission', 'BimodalPacmanEmission'
-                    ]):
-                        # For these models, we need to identify their constructor parameters
-                        # This is challenging because they create complex internal structures
-                        # For now, fall back to generic reconstruction which should work
-                        # since it preserves the relationships between models
-                        return None
-
-                    # For simpler combination models, fall back to generic reconstruction
+                    
+                    # For now, always fall back to generic reconstruction for combination models
+                    # because they have complex constructors that create internal models
+                    # and we don't want to interfere with their internal logic
                     return None
 
                 else:
@@ -2051,9 +2042,16 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 class_name = group.attrs["class_name"]
                 class_module = group.attrs["class_module"]
 
+                # Skip specialized reconstruction for internal models (labels starting with _)
+                # These are created by parent models and shouldn't be reconstructed independently
+                if label.startswith("_"):
+                    # These are internal models, use generic reconstruction
+                    pass
                 # Handle specialized emission model classes
-                if class_name != "EmissionModel" and "emission_models" in class_module:
-                    specialized_model = _create_specialized_model(label, model_info, created_models, grids, class_name, class_module)
+                elif class_name != "EmissionModel" and "emission_models" in class_module:
+                    specialized_model = _create_specialized_model(
+                        label, model_info, created_models, grids, class_name, class_module
+                    )
                     if specialized_model is not None:
                         return specialized_model
                     # If specialized creation failed, fall back to generic
