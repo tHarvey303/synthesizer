@@ -1562,6 +1562,315 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 data=[child.label.encode("utf-8") for child in self._children],
             )
 
+    def to_hdf5(self, group):
+        """Save the model to an HDF5 group.
+
+        Args:
+            group (h5py.Group):
+                The group to save the model to.
+        """
+        # First off call the operation to save operation specific attributes
+        # to the group
+        if self._is_extracting:
+            self.extract_to_hdf5(group)
+        elif self._is_combining:
+            self.combine_to_hdf5(group)
+        elif self._is_transforming:
+            self.transformation_to_hdf5(group)
+        elif self._is_dust_emitting:
+            self.generate_to_hdf5(group)
+        elif self._is_generating:
+            self.generate_to_hdf5(group)
+
+        # Save the model attributes
+        group.attrs["label"] = self.label
+        group.attrs["emitter"] = self.emitter if self.emitter is not None else "None"
+        group.attrs["per_particle"] = self.per_particle
+        group.attrs["save"] = self.save
+        group.attrs["scale_by"] = list(self.scale_by) if self.scale_by else []
+        group.attrs["post_processing"] = (
+            [func.__name__ for func in self.post_processing]
+            if len(self._post_processing) > 0
+            else []
+        )
+
+        # Save the masks
+        if len(self.masks) > 0:
+            masks = group.create_group("Masks")
+            for ind, mask in enumerate(self.masks):
+                mask_group = masks.create_group(f"mask_{ind}")
+                mask_group.attrs["attr"] = mask["attr"]
+                mask_group.attrs["op"] = mask["op"]
+                mask_group.attrs["thresh"] = float(mask["thresh"].value)
+                mask_group.attrs["thresh_units"] = str(mask["thresh"].units)
+
+        # Save the fixed parameters
+        if len(self.fixed_parameters) > 0:
+            fixed_parameters = group.create_group("FixedParameters")
+            for key, value in self.fixed_parameters.items():
+                try:
+                    fixed_parameters.attrs[key] = value
+                except (TypeError, ValueError):
+                    # For complex objects, store their string representation
+                    fixed_parameters.attrs[key] = str(value)
+
+        # Save the children labels for tree reconstruction
+        if len(self._children) > 0:
+            group.create_dataset(
+                "Children",
+                data=[child.label.encode("utf-8") for child in self._children],
+            )
+
+    def save_tree_to_hdf5(self, file_path):
+        """Save the complete emission model tree to an HDF5 file.
+        
+        This method saves all models in the tree to a single HDF5 file,
+        making it easy to reconstruct the complete model later.
+        
+        Args:
+            file_path (str):
+                Path to the HDF5 file to create.
+        """
+        import h5py
+        
+        with h5py.File(file_path, "w") as f:
+            # Save metadata about the tree
+            f.attrs["root_model"] = self.label
+            f.attrs["synthesizer_version"] = "0.1.dev"  # TODO: get actual version
+            
+            # Save each model in the tree as a separate group
+            for label, model in self._models.items():
+                model_group = f.create_group(label)
+                model.to_hdf5(model_group)
+
+    @classmethod 
+    def from_hdf5(cls, group, grids=None, grid_path=None):
+        """Load an emission model tree from an HDF5 group.
+
+        This recursively reconstructs an emission model and its complete tree
+        from HDF5 data. The user can reinstantiate complex models with minimal 
+        input by providing either pre-loaded grids or a path to grid files.
+
+        Args:
+            group (h5py.Group):
+                The HDF5 group containing the emission model tree data.
+            grids (dict, optional):
+                Dictionary of pre-loaded Grid objects keyed by grid name.
+                If None, grids will be loaded as needed from grid_path.
+            grid_path (str, optional):
+                Path to directory containing grid files. If None and grids
+                is None, will attempt to use synthesizer's default grid 
+                loading mechanism.
+
+        Returns:
+            EmissionModel:
+                The reconstructed root emission model with full tree.
+
+        Example:
+            # Load model with pre-loaded grids
+            with h5py.File("my_model.h5", "r") as f:
+                model = EmissionModel.from_hdf5(f["model"], grids=my_grids)
+            
+            # Load model with grid path
+            with h5py.File("my_model.h5", "r") as f:
+                model = EmissionModel.from_hdf5(f["model"], grid_path="/path/to/grids")
+        """
+        # Import here to avoid circular imports
+        import h5py
+        from synthesizer.grid import Grid
+
+        if grids is None:
+            grids = {}
+
+        # First pass: collect all model definitions in the group
+        model_data = {}
+        
+        def _collect_model_data(group, models_dict):
+            """Recursively collect model data from HDF5 groups."""
+            if "type" in group.attrs:
+                # This is a model node
+                label = group.attrs["label"]
+                models_dict[label] = {
+                    "group": group,
+                    "type": group.attrs["type"],
+                    "label": label,
+                    "emitter": group.attrs.get("emitter", None),
+                    "per_particle": group.attrs.get("per_particle", False),
+                    "save": group.attrs.get("save", True),
+                    "scale_by": list(group.attrs.get("scale_by", [])),
+                    "masks": [],
+                    "fixed_parameters": {},
+                    "children": []
+                }
+                
+                # Handle emitter None case
+                if models_dict[label]["emitter"] == "None":
+                    models_dict[label]["emitter"] = None
+                
+                # Load masks
+                if "Masks" in group:
+                    masks_group = group["Masks"]
+                    for mask_name in masks_group:
+                        mask_group = masks_group[mask_name]
+                        mask = {
+                            "attr": mask_group.attrs["attr"],
+                            "op": mask_group.attrs["op"],
+                            "thresh": mask_group.attrs["thresh"]
+                        }
+                        # Handle units if present
+                        if "thresh_units" in mask_group.attrs:
+                            from unyt import unyt_quantity
+                            mask["thresh"] = unyt_quantity(
+                                mask["thresh"], 
+                                mask_group.attrs["thresh_units"]
+                            )
+                        models_dict[label]["masks"].append(mask)
+                
+                # Load fixed parameters
+                if "FixedParameters" in group:
+                    fixed_params_group = group["FixedParameters"]
+                    for key in fixed_params_group.attrs:
+                        models_dict[label]["fixed_parameters"][key] = fixed_params_group.attrs[key]
+                
+                # Load children information
+                if "Children" in group:
+                    children_data = group["Children"]
+                    models_dict[label]["children"] = [
+                        child.decode("utf-8") for child in children_data[:]
+                    ]
+            
+            # Recurse into subgroups
+            for key in group.keys():
+                if isinstance(group[key], h5py.Group):
+                    _collect_model_data(group[key], models_dict)
+        
+        # Collect all model data
+        _collect_model_data(group, model_data)
+        
+        if not model_data:
+            raise ValueError("No emission model data found in HDF5 group")
+        
+        # Second pass: create models in dependency order
+        created_models = {}
+        
+        def _create_model(label, model_info, created_models, grids):
+            """Create a model and its dependencies."""
+            if label in created_models:
+                return created_models[label]
+            
+            model_type = model_info["type"]
+            group = model_info["group"]
+            
+            # Create model based on type
+            if model_type == "extraction":
+                grid_name = group.attrs["grid"]
+                extract_key = group.attrs["extract"]
+                
+                # Load grid if needed
+                if grid_name not in grids:
+                    if grid_path is not None:
+                        # Try different extensions
+                        for ext in [".hdf5", ".h5"]:
+                            try:
+                                grid_file = f"{grid_path}/{grid_name}{ext}"
+                                grids[grid_name] = Grid(grid_file)
+                                break
+                            except FileNotFoundError:
+                                continue
+                        else:
+                            raise FileNotFoundError(f"Grid file not found: {grid_name}")
+                    else:
+                        # Use default grid loading
+                        grids[grid_name] = Grid(grid_name)
+                
+                model = cls(
+                    label=label,
+                    grid=grids[grid_name],
+                    extract=extract_key,
+                    emitter=model_info["emitter"],
+                    per_particle=model_info["per_particle"],
+                    save=model_info["save"],
+                    scale_by=model_info["scale_by"],
+                    **model_info["fixed_parameters"]
+                )
+                
+            elif model_type == "combination":
+                combine_labels = list(group.attrs["combine"])
+                
+                # First create all child models
+                combine_models = []
+                for child_label in combine_labels:
+                    if child_label in model_data:
+                        child_model = _create_model(child_label, model_data[child_label], created_models, grids)
+                        combine_models.append(child_model)
+                
+                model = cls(
+                    label=label,
+                    combine=combine_models,
+                    emitter=model_info["emitter"],
+                    per_particle=model_info["per_particle"], 
+                    save=model_info["save"],
+                    scale_by=model_info["scale_by"],
+                    **model_info["fixed_parameters"]
+                )
+                
+            else:
+                # For transformation and generation, we need to implement more complex
+                # reconstruction of transformers and generators. For now, raise an error.
+                raise NotImplementedError(
+                    f"Loading {model_type} models from HDF5 is not yet fully implemented. "
+                    "Currently only extraction and combination models are supported."
+                )
+            
+            # Add masks
+            for mask in model_info["masks"]:
+                model.add_mask(**mask)
+            
+            created_models[label] = model
+            return model
+        
+        # Find the root model (one that appears in no other model's children)
+        all_children = set()
+        for model_info in model_data.values():
+            all_children.update(model_info["children"])
+        
+        root_candidates = [label for label in model_data.keys() if label not in all_children]
+        
+        if len(root_candidates) != 1:
+            # If we can't determine the root, use the first model
+            root_label = list(model_data.keys())[0]
+        else:
+            root_label = root_candidates[0]
+        
+        # Create the root model and all its dependencies
+        root_model = _create_model(root_label, model_data[root_label], created_models, grids)
+        
+        return root_model
+
+    @classmethod
+    def load_tree_from_hdf5(cls, file_path, grids=None, grid_path=None):
+        """Load a complete emission model tree from an HDF5 file.
+        
+        This is a convenience method for loading models saved with
+        save_tree_to_hdf5().
+        
+        Args:
+            file_path (str):
+                Path to the HDF5 file containing the model tree.
+            grids (dict, optional):
+                Dictionary of pre-loaded Grid objects keyed by grid name.
+            grid_path (str, optional):
+                Path to directory containing grid files.
+                
+        Returns:
+            EmissionModel:
+                The root emission model with complete tree loaded.
+        """
+        import h5py
+        
+        with h5py.File(file_path, "r") as f:
+            return cls.from_hdf5(f, grids=grids, grid_path=grid_path)
+
     def _get_tree_levels(self, root):
         """Get the levels of the tree.
 
