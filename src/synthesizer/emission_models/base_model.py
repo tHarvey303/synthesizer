@@ -1582,6 +1582,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             group.attrs["generator_emissivity"] = generator.emissivity
         if hasattr(generator, 'cmb_factor'):
             group.attrs["generator_cmb_factor"] = generator.cmb_factor
+        if hasattr(generator, 'cmb_heating'):
+            group.attrs["generator_cmb_heating"] = generator.cmb_heating
+        if hasattr(generator, 'redshift'):
+            group.attrs["generator_redshift"] = generator.redshift
 
         # Save generator dependencies if they exist
         if hasattr(self, 'lum_intrinsic_model') and (
