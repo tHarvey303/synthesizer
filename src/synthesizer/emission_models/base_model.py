@@ -1597,12 +1597,15 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 self.lum_attenuated_model.label
             )
 
-    def to_hdf5(self, group):
+    def to_hdf5(self, group, grid_path=None):
         """Save the model to an HDF5 group.
 
         Args:
             group (h5py.Group):
                 The group to save the model to.
+            grid_path (str, optional):
+                Path to the directory containing grid files. If provided,
+                this will be saved to enable automatic grid loading.
         """
         # First off call the operation to save operation specific attributes
         # to the group
@@ -1634,6 +1637,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         # Save the class information for proper reconstruction
         group.attrs["class_name"] = self.__class__.__name__
         group.attrs["class_module"] = self.__class__.__module__
+        
+        # Save grid path if provided for automatic grid loading
+        if grid_path is not None:
+            group.attrs["grid_path"] = grid_path
 
         # Save the masks
         if len(self.masks) > 0:
@@ -1662,7 +1669,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 data=[child.label.encode("utf-8") for child in self._children],
             )
 
-    def save_tree_to_hdf5(self, file_path):
+    def save_tree_to_hdf5(self, file_path, grid_path=None):
         """Save the complete emission model tree to an HDF5 file.
 
         This method saves all models in the tree to a single HDF5 file,
@@ -1671,6 +1678,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         Args:
             file_path (str):
                 Path to the HDF5 file to create.
+            grid_path (str, optional):
+                Path to the directory containing grid files. If provided,
+                this will be saved to enable automatic grid loading.
         """
         import h5py
 
@@ -1679,14 +1689,18 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             f.attrs["root_model"] = self.label
             # TODO: get actual version
             f.attrs["synthesizer_version"] = "0.1.dev"
+            
+            # Save global grid path if provided
+            if grid_path is not None:
+                f.attrs["grid_path"] = grid_path
 
             # Save each model in the tree as a separate group
             for label, model in self._models.items():
                 model_group = f.create_group(label)
-                model.to_hdf5(model_group)
+                model.to_hdf5(model_group, grid_path=grid_path)
 
     @classmethod
-    def from_hdf5(cls, group, grids=None, grid_path=None):
+    def from_hdf5(cls, group, grids=None, grid_path=None, grid_dir=None):
         """Load an emission model tree from an HDF5 group.
 
         This recursively reconstructs an emission model and its complete tree
@@ -1698,11 +1712,13 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 The HDF5 group containing the emission model tree data.
             grids (dict, optional):
                 Dictionary of pre-loaded Grid objects keyed by grid name.
-                If None, grids will be loaded as needed from grid_path.
+                If None, grids will be loaded as needed from grid_path/grid_dir.
             grid_path (str, optional):
-                Path to directory containing grid files. If None and grids
-                is None, will attempt to use synthesizer's default grid
-                loading mechanism.
+                Path to directory containing grid files. If None, will check
+                for saved grid_path in HDF5, then grid_dir parameter, then 
+                SYNTHESIZER_GRID_DIR environment variable.
+            grid_dir (str, optional):
+                Alternative parameter name for grid_path for backward compatibility.
 
         Returns:
             EmissionModel:
@@ -1720,12 +1736,37 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 )
         """
         # Import here to avoid circular imports
+        import os
         import h5py
 
         from synthesizer.grid import Grid
+        from synthesizer.data.initialise import get_grids_dir
 
         if grids is None:
             grids = {}
+
+        # Determine grid path priority:
+        # 1. Explicit grid_path parameter
+        # 2. Explicit grid_dir parameter (alias)
+        # 3. Saved grid_path in HDF5 (group level)
+        # 4. Saved grid_path in HDF5 (file level)
+        # 5. SYNTHESIZER_GRID_DIR environment variable
+        # 6. Default synthesizer grids directory
+        resolved_grid_path = grid_path
+        if resolved_grid_path is None and grid_dir is not None:
+            resolved_grid_path = grid_dir
+        if resolved_grid_path is None and "grid_path" in group.attrs:
+            resolved_grid_path = group.attrs["grid_path"]
+        if resolved_grid_path is None and "grid_path" in group.file.attrs:
+            resolved_grid_path = group.file.attrs["grid_path"]
+        if resolved_grid_path is None:
+            # Try environment variable
+            env_grid_dir = os.environ.get("SYNTHESIZER_GRID_DIR")
+            if env_grid_dir is not None:
+                resolved_grid_path = env_grid_dir
+            else:
+                # Fall back to default synthesizer grids directory
+                resolved_grid_path = str(get_grids_dir())
 
         # First pass: collect all model definitions in the group
         model_data = {}
@@ -1987,11 +2028,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
                     # Load grid if needed
                     if grid_name not in grids:
-                        if grid_path is not None:
-                            # Try different extensions
-                            for ext in [".hdf5", ".h5"]:
+                        if resolved_grid_path is not None:
+                            # Try different extensions (.hdf5, .h5, no extension)
+                            for ext in [".hdf5", ".h5", ""]:
                                 try:
-                                    grid_file = f"{grid_path}/{grid_name}{ext}"
+                                    grid_file = f"{resolved_grid_path}/{grid_name}{ext}"
                                     grids[grid_name] = Grid(grid_file)
                                     break
                                 except FileNotFoundError:
@@ -1999,8 +2040,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                             else:
                                 raise FileNotFoundError(f"Grid file not found: {grid_name}")
                         else:
-                            # If no grid_path provided and grid not in grids, raise error
-                            raise FileNotFoundError(f"Grid '{grid_name}' not found in provided grids and no grid_path specified")
+                            # If no grid path available and grid not in grids, raise error
+                            raise FileNotFoundError(
+                                f"Grid '{grid_name}' not found in provided grids and no grid path available "
+                                f"(checked grid_path, grid_dir, saved HDF5 grid_path, SYNTHESIZER_GRID_DIR env var)"
+                            )
 
                     # Get common parameters for specialized models
                     grid = grids[grid_name]
@@ -2220,11 +2264,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
                 # Load grid if needed
                 if grid_name not in grids:
-                    if grid_path is not None:
-                        # Try different extensions
-                        for ext in [".hdf5", ".h5"]:
+                    if resolved_grid_path is not None:
+                        # Try different extensions (.hdf5, .h5, no extension)
+                        for ext in [".hdf5", ".h5", ""]:
                             try:
-                                grid_file = f"{grid_path}/{grid_name}{ext}"
+                                grid_file = f"{resolved_grid_path}/{grid_name}{ext}"
                                 grids[grid_name] = Grid(grid_file)
                                 break
                             except FileNotFoundError:
@@ -2232,10 +2276,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         else:
                             raise FileNotFoundError(f"Grid file not found: {grid_name}")
                     else:
-                        # If no grid_path provided and grid not in grids
+                        # If no grid path available and grid not in grids
                         raise FileNotFoundError(
                             f"Grid '{grid_name}' not found in provided grids "
-                            "and no grid_path specified"
+                            f"and no grid path available "
+                            f"(checked grid_path, grid_dir, saved HDF5 grid_path, SYNTHESIZER_GRID_DIR env var)"
                         )
 
                 model = cls(
@@ -2433,7 +2478,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         return root_model
 
     @classmethod
-    def load_tree_from_hdf5(cls, file_path, grids=None, grid_path=None):
+    def load_tree_from_hdf5(cls, file_path, grids=None, grid_path=None, grid_dir=None):
         """Load a complete emission model tree from an HDF5 file.
 
         This is a convenience method for loading models saved with
@@ -2446,6 +2491,8 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 Dictionary of pre-loaded Grid objects keyed by grid name.
             grid_path (str, optional):
                 Path to directory containing grid files.
+            grid_dir (str, optional):
+                Alternative parameter name for grid_path for backward compatibility.
 
         Returns:
             EmissionModel:
@@ -2454,7 +2501,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         import h5py
 
         with h5py.File(file_path, "r") as f:
-            return cls.from_hdf5(f, grids=grids, grid_path=grid_path)
+            return cls.from_hdf5(f, grids=grids, grid_path=grid_path, grid_dir=grid_dir)
 
     def _get_tree_levels(self, root):
         """Get the levels of the tree.

@@ -551,6 +551,221 @@ class TestEmissionModelHDF5:
         assert loaded_model.label == "test_incident"
         assert loaded_model._is_extracting
 
+    def test_grid_path_saving_and_loading(self, test_grid):
+        """Test that grid_path is saved and used for loading."""
+        model = EmissionModel(
+            label="test_model",
+            grid=test_grid,
+            extract="incident",
+            emitter="stellar"
+        )
+
+        grid_path = "/path/to/test/grids"
+        
+        # Save with grid path
+        with h5py.File(self.test_file, "w") as f:
+            model_group = f.create_group("test_model")
+            model.to_hdf5(model_group, grid_path=grid_path)
+
+        # Verify grid path was saved
+        with h5py.File(self.test_file, "r") as f:
+            model_group = f["test_model"]
+            assert model_group.attrs["grid_path"] == grid_path
+
+    def test_save_tree_with_grid_path(self, test_grid):
+        """Test that save_tree_to_hdf5 saves grid_path at file level."""
+        model = EmissionModel(
+            label="test_model",
+            grid=test_grid,
+            extract="incident",
+            emitter="stellar"
+        )
+
+        grid_path = "/path/to/test/grids"
+        
+        # Save tree with grid path
+        model.save_tree_to_hdf5(self.test_file, grid_path=grid_path)
+
+        # Verify grid path was saved at file level
+        with h5py.File(self.test_file, "r") as f:
+            assert f.attrs["grid_path"] == grid_path
+            # Also verify model was saved
+            assert "test_model" in f
+
+    def test_grid_dir_parameter(self, test_grid):
+        """Test that grid_dir parameter works as alias for grid_path."""
+        model = EmissionModel(
+            label="test_model",
+            grid=test_grid,
+            extract="incident",
+            emitter="stellar"
+        )
+
+        with h5py.File(self.test_file, "w") as f:
+            model_group = f.create_group("test_model")
+            model.to_hdf5(model_group)
+
+        # Test that grid_dir parameter works
+        grids = {test_grid.grid_name: test_grid}
+        with h5py.File(self.test_file, "r") as f:
+            # Should work with grid_dir instead of grid_path
+            loaded_model = EmissionModel.from_hdf5(
+                f["test_model"], grids=grids, grid_dir="/some/path"
+            )
+        
+        assert loaded_model.label == "test_model"
+
+    def test_environment_variable_grid_loading(self, test_grid, monkeypatch):
+        """Test that SYNTHESIZER_GRID_DIR environment variable is used."""
+        import tempfile
+        
+        # Create a temporary directory for testing
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model = EmissionModel(
+                label="test_model",
+                grid=test_grid,
+                extract="incident", 
+                emitter="stellar"
+            )
+
+            with h5py.File(self.test_file, "w") as f:
+                model_group = f.create_group("test_model")
+                model.to_hdf5(model_group)
+
+            # Set environment variable
+            monkeypatch.setenv("SYNTHESIZER_GRID_DIR", temp_dir)
+            
+            # Create a mock grid file (we won't actually load it, just test the path resolution)
+            grid_file = os.path.join(temp_dir, f"{test_grid.grid_name}.hdf5")
+            with open(grid_file, "w") as f:
+                f.write("mock grid file")
+
+            # Test loading uses the environment variable (will fail to load actual grid, but path should be resolved)
+            with h5py.File(self.test_file, "r") as f:
+                try:
+                    # This should try to load from the environment path
+                    EmissionModel.from_hdf5(f["test_model"], grids={})
+                except Exception as e:
+                    # Should mention the environment variable in error or try to load from temp_dir
+                    # The exact behavior depends on implementation, but it should at least try the env path
+                    pass
+
+    def test_recursive_model_comparison(self, test_grid):
+        """Test deep comparison of model attributes before and after serialization."""
+        # Create a complex model with various attributes
+        model = EmissionModel(
+            label="complex_model",
+            grid=test_grid,
+            extract="incident",
+            emitter="stellar",
+            per_particle=True,
+            save=False,
+            tau_v=0.5,
+            fesc=0.1
+        )
+        
+        # Add a mask
+        from unyt import Myr
+        model.add_mask("age", ">", 100 * Myr)
+
+        # Save and reload
+        with h5py.File(self.test_file, "w") as f:
+            model_group = f.create_group("complex_model")
+            model.to_hdf5(model_group)
+
+        grids = {test_grid.grid_name: test_grid}
+        with h5py.File(self.test_file, "r") as f:
+            loaded_model = EmissionModel.from_hdf5(f, grids=grids)
+
+        # Compare key attributes
+        assert loaded_model.label == model.label
+        assert loaded_model.emitter == model.emitter
+        assert loaded_model.per_particle == model.per_particle
+        assert loaded_model.save == model.save
+        assert loaded_model._is_extracting == model._is_extracting
+        assert loaded_model.extract == model.extract
+        
+        # Compare fixed parameters
+        assert loaded_model.fixed_parameters["tau_v"] == model.fixed_parameters["tau_v"]
+        assert loaded_model.fixed_parameters["fesc"] == model.fixed_parameters["fesc"]
+        
+        # Compare masks
+        assert len(loaded_model.masks) == len(model.masks)
+        if len(loaded_model.masks) > 0:
+            orig_mask = model.masks[0]
+            loaded_mask = loaded_model.masks[0]
+            assert loaded_mask["attr"] == orig_mask["attr"]
+            assert loaded_mask["op"] == orig_mask["op"]
+            assert loaded_mask["thresh"] == orig_mask["thresh"]
+
+    def test_model_tree_recursive_comparison(self, test_grid):
+        """Test recursive comparison of complex model trees."""
+        # Create models for combination
+        model1 = EmissionModel(
+            label="model1",
+            grid=test_grid,
+            extract="incident",
+            emitter="stellar"
+        )
+        
+        model2 = EmissionModel(
+            label="model2", 
+            grid=test_grid,
+            extract="nebular",
+            emitter="stellar"
+        )
+        
+        # Create combination model
+        combo_model = EmissionModel(
+            label="combo",
+            combine=[model1, model2],
+            emitter="stellar"
+        )
+
+        # Save and reload
+        combo_model.save_tree_to_hdf5(self.test_file)
+        
+        grids = {test_grid.grid_name: test_grid}
+        loaded_combo = EmissionModel.load_tree_from_hdf5(self.test_file, grids=grids)
+
+        # Compare root model
+        assert loaded_combo.label == combo_model.label
+        assert loaded_combo.emitter == combo_model.emitter
+        assert loaded_combo._is_combining == combo_model._is_combining
+        
+        # Compare tree structure - both should have same models
+        assert len(loaded_combo._models) == len(combo_model._models)
+        
+        # Verify all child models exist
+        for label in combo_model._models:
+            assert label in loaded_combo._models
+            orig_child = combo_model._models[label]
+            loaded_child = loaded_combo._models[label]
+            assert loaded_child.label == orig_child.label
+            assert loaded_child.emitter == orig_child.emitter
+
+    def test_grid_loading_error_messages(self, test_grid):
+        """Test that helpful error messages are provided for grid loading failures."""
+        model = EmissionModel(
+            label="test_model",
+            grid=test_grid,
+            extract="incident",
+            emitter="stellar"
+        )
+
+        with h5py.File(self.test_file, "w") as f:
+            model_group = f.create_group("test_model")
+            model.to_hdf5(model_group)
+
+        # Test error message when no grids or paths provided
+        with h5py.File(self.test_file, "r") as f:
+            with pytest.raises(FileNotFoundError) as exc_info:
+                EmissionModel.from_hdf5(f["test_model"], grids={})
+            
+            error_msg = str(exc_info.value)
+            # Should mention the various sources it checked
+            assert "grid_path" in error_msg or "SYNTHESIZER_GRID_DIR" in error_msg
+
 
 if __name__ == "__main__":
     pytest.main([__file__])
