@@ -413,7 +413,7 @@ class TestEmissionModelHDF5:
         # Try to load without providing the grid
         with h5py.File(self.test_file, "r") as f:
             with pytest.raises(FileNotFoundError):
-                EmissionModel.from_hdf5(f, grids={})  # Empty grids dict
+                EmissionModel.from_hdf5(f["test_model"], grids={})  # Empty grids dict
 
     def test_incident_emission_from_hdf5(self, incident_emission_model, test_grid):
         """Test that IncidentEmission models can be loaded back correctly."""

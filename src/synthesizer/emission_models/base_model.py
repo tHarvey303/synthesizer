@@ -1957,6 +1957,19 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         def _create_specialized_model(label, model_info, created_models, grids, class_name, class_module):
             """Create a specialized emission model instance."""
             try:
+                # Skip specialized reconstruction for complex models that create internal hierarchies
+                complex_model_classes = {
+                    "TransmittedEmission", "TransmittedEmissionWithEscaped", "TransmittedEmissionNoEscaped",
+                    "ReprocessedEmission", "IntrinsicEmission", "PacmanEmission", 
+                    "BimodalPacmanEmission", "NebularEmission", "EmergentEmission",
+                    "TotalEmission", "AttenuatedEmission"
+                }
+                
+                if class_name in complex_model_classes:
+                    # These models have complex constructors and create internal hierarchies
+                    # Fall back to generic reconstruction which will preserve the saved tree
+                    return None
+                
                 # Import the specialized class
                 import importlib
                 module = importlib.import_module(class_module)
@@ -2203,21 +2216,31 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
             created_models[label] = model
             return model
 
-        # Find the root model (one that appears in no other model's children)
-        all_children = set()
-        for model_info in model_data.values():
-            all_children.update(model_info["children"])
+        # First check if there's a saved root_model attribute
+        root_label = None
+        if hasattr(group, 'attrs') and 'root_model' in group.attrs:
+            saved_root = group.attrs['root_model']
+            if isinstance(saved_root, bytes):
+                saved_root = saved_root.decode('utf-8')
+            if saved_root in model_data:
+                root_label = saved_root
+        
+        # If no saved root_model or it's not in the data, fall back to dependency analysis
+        if root_label is None:
+            all_children = set()
+            for model_info in model_data.values():
+                all_children.update(model_info["children"])
 
-        root_candidates = [
-            label for label in model_data.keys()
-            if label not in all_children
-        ]
+            root_candidates = [
+                label for label in model_data.keys()
+                if label not in all_children
+            ]
 
-        if len(root_candidates) != 1:
-            # If we can't determine the root, use the first model
-            root_label = list(model_data.keys())[0]
-        else:
-            root_label = root_candidates[0]
+            if len(root_candidates) != 1:
+                # If we can't determine the root, use the first model
+                root_label = list(model_data.keys())[0]
+            else:
+                root_label = root_candidates[0]
 
         # Create the root model and all its dependencies
         root_model = _create_model(
