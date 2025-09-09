@@ -2008,6 +2008,10 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         "grid": grid,
                         "label": label,
                     }
+                    
+                    # Get extract key for extraction models
+                    if "extract" in group.attrs:
+                        kwargs["extract"] = group.attrs["extract"]
 
                     # Add fixed parameters
                     kwargs.update(model_info["fixed_parameters"])
@@ -2023,18 +2027,149 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     return model
 
                 elif model_info["type"] == "transformation":
-                    # For specialized transformation models, we need to handle them differently
-                    # These are complex models that create internal transformations
-                    # For now, fall back to generic reconstruction
+                    # For specialized transformation models that aren't complex internal ones
+                    transformer_type = group.attrs.get("transformer", None)
+                    apply_to_label = group.attrs.get("apply_to", None)
+                    
+                    if transformer_type and apply_to_label:
+                        # Create apply_to model first if needed
+                        if apply_to_label in model_data and apply_to_label not in created_models:
+                            _create_model(
+                                apply_to_label,
+                                model_data[apply_to_label],
+                                created_models,
+                                grids
+                            )
+                        
+                        if apply_to_label in created_models:
+                            # Try to reconstruct the transformer
+                            try:
+                                transformer = _reconstruct_transformer(transformer_type, group.attrs)
+                                kwargs = {
+                                    "label": label,
+                                    "apply_to": created_models[apply_to_label],
+                                    "transformer": transformer,
+                                }
+                                kwargs.update(model_info["fixed_parameters"])
+                                
+                                model = specialized_class(**kwargs)
+                                
+                                # Add masks if present
+                                for mask in model_info["masks"]:
+                                    model.add_mask(**mask)
+                                
+                                created_models[label] = model
+                                return model
+                            except Exception:
+                                # If transformer reconstruction fails, fall back
+                                pass
+                    
+                    # Fall back to generic reconstruction
                     return None
 
                 elif model_info["type"] == "combination":
-                    # Handle specialized combination models (like NebularEmission, BimodalPacman, etc.)
-                    # These are complex models that build their own internal trees
+                    # Handle specialized combination models that aren't complex internal ones
+                    combine_labels = group.attrs.get("combine", None)
+                    
+                    if combine_labels is not None:
+                        combine_labels = list(combine_labels)
+                        
+                        # Create child models first if needed
+                        combine_models = []
+                        for child_label in combine_labels:
+                            if child_label in model_data:
+                                if child_label not in created_models:
+                                    _create_model(
+                                        child_label,
+                                        model_data[child_label],
+                                        created_models,
+                                        grids
+                                    )
+                                if child_label in created_models:
+                                    combine_models.append(created_models[child_label])
+                        
+                        if len(combine_models) == len(combine_labels):
+                            # All child models created successfully
+                            kwargs = {
+                                "label": label,
+                                "combine": combine_models,
+                            }
+                            kwargs.update(model_info["fixed_parameters"])
+                            
+                            model = specialized_class(**kwargs)
+                            
+                            # Add masks if present
+                            for mask in model_info["masks"]:
+                                model.add_mask(**mask)
+                            
+                            created_models[label] = model
+                            return model
+                    
+                    # Fall back to generic reconstruction
+                    return None
 
-                    # For now, always fall back to generic reconstruction for combination models
-                    # because they have complex constructors that create internal models
-                    # and we don't want to interfere with their internal logic
+                elif model_info["type"] == "generation":
+                    # Handle specialized generation models
+                    generator_type = group.attrs.get("generator", None)
+                    
+                    if generator_type:
+                        try:
+                            # Get dependent model labels
+                            lum_intrinsic_label = group.attrs.get("lum_intrinsic_model", None)
+                            lum_attenuated_label = group.attrs.get("lum_attenuated_model", None)
+                            
+                            # Create dependent models if needed
+                            lum_intrinsic_model = None
+                            lum_attenuated_model = None
+                            
+                            if lum_intrinsic_label and lum_intrinsic_label in model_data:
+                                if lum_intrinsic_label not in created_models:
+                                    _create_model(
+                                        lum_intrinsic_label,
+                                        model_data[lum_intrinsic_label],
+                                        created_models,
+                                        grids
+                                    )
+                                lum_intrinsic_model = created_models.get(lum_intrinsic_label)
+                            
+                            if lum_attenuated_label and lum_attenuated_label in model_data:
+                                if lum_attenuated_label not in created_models:
+                                    _create_model(
+                                        lum_attenuated_label,
+                                        model_data[lum_attenuated_label],
+                                        created_models,
+                                        grids
+                                    )
+                                lum_attenuated_model = created_models.get(lum_attenuated_label)
+                            
+                            # Try to reconstruct the generator
+                            generator = _reconstruct_generator(generator_type, group.attrs)
+                            
+                            kwargs = {
+                                "label": label,
+                                "generator": generator,
+                            }
+                            
+                            if lum_intrinsic_model:
+                                kwargs["lum_intrinsic_model"] = lum_intrinsic_model
+                            if lum_attenuated_model:
+                                kwargs["lum_attenuated_model"] = lum_attenuated_model
+                                
+                            kwargs.update(model_info["fixed_parameters"])
+                            
+                            model = specialized_class(**kwargs)
+                            
+                            # Add masks if present
+                            for mask in model_info["masks"]:
+                                model.add_mask(**mask)
+                            
+                            created_models[label] = model
+                            return model
+                        except Exception:
+                            # If generator reconstruction fails, fall back
+                            pass
+                    
+                    # Fall back to generic reconstruction
                     return None
 
                 else:
