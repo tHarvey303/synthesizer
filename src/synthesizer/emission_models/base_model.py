@@ -1801,7 +1801,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
         created_models = {}
 
         def _reconstruct_transformer(transformer_type_str, group_attrs):
-            """Reconstruct a transformer from its type string and attributes."""
+            """Reconstruct a transformer from type string and attributes."""
             # Import transformer classes here to avoid circular imports
             try:
                 # Dust attenuation transformers
@@ -1845,21 +1845,25 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
                 # Escape fraction transformers
                 elif "EscapedFraction" in transformer_type_str:
-                    from synthesizer.emission_models.transformers.escape_fraction import (
-                        EscapedFraction,  # noqa: E501
+                    from synthesizer.emission_models.transformers.escape_fraction import (  # noqa: E501
+                        EscapedFraction,
                     )
 
-                    fesc_attrs = group_attrs.get('transformer_fesc_attrs', ("fesc",))
+                    fesc_attrs = group_attrs.get(
+                        'transformer_fesc_attrs', ("fesc",)
+                    )
                     if isinstance(fesc_attrs, str):
                         fesc_attrs = (fesc_attrs,)
                     return EscapedFraction(fesc_attrs=fesc_attrs)
 
                 elif "ProcessedFraction" in transformer_type_str:
-                    from synthesizer.emission_models.transformers.escape_fraction import (
-                        ProcessedFraction,  # noqa: E501
+                    from synthesizer.emission_models.transformers.escape_fraction import (  # noqa: E501
+                        ProcessedFraction,
                     )
 
-                    fesc_attrs = group_attrs.get('transformer_fesc_attrs', ("fesc",))
+                    fesc_attrs = group_attrs.get(
+                        'transformer_fesc_attrs', ("fesc",)
+                    )
                     if isinstance(fesc_attrs, str):
                         fesc_attrs = (fesc_attrs,)
                     return ProcessedFraction(fesc_attrs=fesc_attrs)
@@ -1960,16 +1964,16 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 # Skip specialized reconstruction for complex models that create internal hierarchies
                 complex_model_classes = {
                     "TransmittedEmission", "TransmittedEmissionWithEscaped", "TransmittedEmissionNoEscaped",
-                    "ReprocessedEmission", "IntrinsicEmission", "PacmanEmission", 
+                    "ReprocessedEmission", "IntrinsicEmission", "PacmanEmission",
                     "BimodalPacmanEmission", "NebularEmission", "EmergentEmission",
                     "TotalEmission", "AttenuatedEmission"
                 }
-                
+
                 if class_name in complex_model_classes:
                     # These models have complex constructors and create internal hierarchies
                     # Fall back to generic reconstruction which will preserve the saved tree
                     return None
-                
+
                 # Import the specialized class
                 import importlib
                 module = importlib.import_module(class_module)
@@ -2027,7 +2031,7 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 elif model_info["type"] == "combination":
                     # Handle specialized combination models (like NebularEmission, BimodalPacman, etc.)
                     # These are complex models that build their own internal trees
-                    
+
                     # For now, always fall back to generic reconstruction for combination models
                     # because they have complex constructors that create internal models
                     # and we don't want to interfere with their internal logic
@@ -2071,6 +2075,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
 
             # Create model based on type for generic EmissionModel
             if model_type == "extraction":
+                # Check if required attributes exist
+                if "grid" not in group.attrs or "extract" not in group.attrs:
+                    raise ValueError(f"Missing required attributes for extraction model {label}. "
+                                   f"Expected 'grid' and 'extract', found: {list(group.attrs.keys())}")
+
                 grid_name = group.attrs["grid"]
                 extract_key = group.attrs["extract"]
 
@@ -2088,8 +2097,11 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         else:
                             raise FileNotFoundError(f"Grid file not found: {grid_name}")
                     else:
-                        # If no grid_path provided and grid not in grids, raise error
-                        raise FileNotFoundError(f"Grid '{grid_name}' not found in provided grids and no grid_path specified")
+                        # If no grid_path provided and grid not in grids
+                        raise FileNotFoundError(
+                            f"Grid '{grid_name}' not found in provided grids "
+                            "and no grid_path specified"
+                        )
 
                 model = cls(
                     label=label,
@@ -2103,13 +2115,26 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 )
 
             elif model_type == "combination":
+                # Check if required attributes exist
+                if "combine" not in group.attrs:
+                    raise ValueError(
+                        f"Missing required attribute 'combine' for "
+                        f"combination model {label}. "
+                        f"Found: {list(group.attrs.keys())}"
+                    )
+
                 combine_labels = list(group.attrs["combine"])
 
                 # First create all child models
                 combine_models = []
                 for child_label in combine_labels:
                     if child_label in model_data:
-                        child_model = _create_model(child_label, model_data[child_label], created_models, grids)
+                        child_model = _create_model(
+                            child_label,
+                            model_data[child_label],
+                            created_models,
+                            grids
+                        )
                         combine_models.append(child_model)
 
                 model = cls(
@@ -2123,6 +2148,15 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 )
 
             elif model_type == "transformation":
+                # Check if required attributes exist
+                required_attrs = ["transformer", "apply_to"]
+                if not all(attr in group.attrs for attr in required_attrs):
+                    raise ValueError(
+                        f"Missing required attributes for transformation "
+                        f"model {label}. Expected 'transformer' and "
+                        f"'apply_to', found: {list(group.attrs.keys())}"
+                    )
+
                 transformer_type = group.attrs["transformer"]
                 apply_to_label = group.attrs["apply_to"]
 
@@ -2135,7 +2169,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                         grids
                     )
                 else:
-                    raise ValueError(f"Cannot find apply_to model: {apply_to_label}")
+                    raise ValueError(
+                        f"Cannot find apply_to model: {apply_to_label}"
+                    )
 
                 # Try to reconstruct the transformer
                 transformer = _reconstruct_transformer(
@@ -2158,6 +2194,14 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 )
 
             elif model_type == "generation":
+                # Check if required attributes exist
+                if "generator" not in group.attrs:
+                    raise ValueError(
+                        f"Missing required attribute 'generator' for "
+                        f"generation model {label}. "
+                        f"Found: {list(group.attrs.keys())}"
+                    )
+
                 generator_type = group.attrs["generator"]
                 lum_intrinsic_label = group.attrs.get(
                     "lum_intrinsic_model",
@@ -2224,8 +2268,9 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                 saved_root = saved_root.decode('utf-8')
             if saved_root in model_data:
                 root_label = saved_root
-        
-        # If no saved root_model or it's not in the data, fall back to dependency analysis
+
+        # If no saved root_model or not in data, fall back to dependency
+        # analysis
         if root_label is None:
             all_children = set()
             for model_info in model_data.values():
