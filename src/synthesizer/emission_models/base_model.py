@@ -1958,6 +1958,45 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     f"Could not import transformer {transformer_type_str}: {e}"
                 )
 
+        def _safe_create_object(cls, **kwargs):
+            """Safely create an object by filtering out unsupported parameters.
+            
+            This function inspects the class constructor and only passes
+            parameters that it accepts, setting any remaining parameters
+            as attributes after creation.
+            
+            Args:
+                cls: The class to instantiate
+                **kwargs: All potential parameters
+                
+            Returns:
+                The created object with all parameters properly set
+            """
+            import inspect
+            
+            # Get the constructor signature
+            sig = inspect.signature(cls.__init__)
+            constructor_params = set(sig.parameters.keys()) - {'self'}
+            
+            # Split kwargs into constructor args and post-creation attributes
+            constructor_kwargs = {}
+            post_creation_attrs = {}
+            
+            for key, value in kwargs.items():
+                if key in constructor_params:
+                    constructor_kwargs[key] = value
+                else:
+                    post_creation_attrs[key] = value
+            
+            # Create the object with supported parameters
+            obj = cls(**constructor_kwargs)
+            
+            # Set remaining parameters as attributes
+            for key, value in post_creation_attrs.items():
+                setattr(obj, key, value)
+                
+            return obj
+
         def _reconstruct_generator(generator_type_str, group_attrs):
             """Reconstruct a generator object from its type string and attributes."""
             try:
@@ -1965,28 +2004,41 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                     from synthesizer.emission_models.dust.emission import (
                         Blackbody,
                     )
-                    temperature = None
+                    kwargs = {}
                     if 'generator_temperature' in group_attrs:
                         from unyt import unyt_quantity
                         temp_value = group_attrs['generator_temperature']
                         temp_units = group_attrs.get('generator_temperature_units', 'K')
-                        temperature = unyt_quantity(temp_value, temp_units)
-                    cmb_factor = group_attrs.get('generator_cmb_factor', 1.0)
-                    return Blackbody(temperature=temperature, cmb_factor=cmb_factor)
+                        kwargs['temperature'] = unyt_quantity(temp_value, temp_units)
+                    if 'generator_cmb_factor' in group_attrs:
+                        kwargs['cmb_factor'] = group_attrs['generator_cmb_factor']
+                    if 'generator_cmb_heating' in group_attrs:
+                        kwargs['cmb_heating'] = group_attrs['generator_cmb_heating']
+                    if 'generator_redshift' in group_attrs:
+                        kwargs['redshift'] = group_attrs['generator_redshift']
+                    
+                    return _safe_create_object(Blackbody, **kwargs)
 
                 elif "Greybody" in generator_type_str:
                     from synthesizer.emission_models.dust.emission import (
                         Greybody,
                     )
-                    temperature = None
+                    kwargs = {}
                     if 'generator_temperature' in group_attrs:
                         from unyt import unyt_quantity
                         temp_value = group_attrs['generator_temperature']
                         temp_units = group_attrs.get('generator_temperature_units', 'K')
-                        temperature = unyt_quantity(temp_value, temp_units)
-                    emissivity = group_attrs.get('generator_emissivity', 1.5)
-                    cmb_factor = group_attrs.get('generator_cmb_factor', 1.0)
-                    return Greybody(temperature=temperature, emissivity=emissivity, cmb_factor=cmb_factor)
+                        kwargs['temperature'] = unyt_quantity(temp_value, temp_units)
+                    if 'generator_emissivity' in group_attrs:
+                        kwargs['emissivity'] = group_attrs['generator_emissivity']
+                    if 'generator_cmb_factor' in group_attrs:
+                        kwargs['cmb_factor'] = group_attrs['generator_cmb_factor']
+                    if 'generator_cmb_heating' in group_attrs:
+                        kwargs['cmb_heating'] = group_attrs['generator_cmb_heating']
+                    if 'generator_redshift' in group_attrs:
+                        kwargs['redshift'] = group_attrs['generator_redshift']
+                    
+                    return _safe_create_object(Greybody, **kwargs)
 
                 # Add more generator types as needed
                 else:
@@ -2038,7 +2090,29 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                                 except FileNotFoundError:
                                     continue
                             else:
-                                raise FileNotFoundError(f"Grid file not found: {grid_name}")
+                                # More detailed error showing what was checked
+                                sources_checked = []
+                                if grid_path is not None:
+                                    sources_checked.append(f"grid_path='{grid_path}'")
+                                if grid_dir is not None:
+                                    sources_checked.append(f"grid_dir='{grid_dir}'")
+                                if "grid_path" in group.attrs:
+                                    sources_checked.append(f"HDF5 group grid_path='{group.attrs['grid_path']}'")
+                                if "grid_path" in group.file.attrs:
+                                    sources_checked.append(f"HDF5 file grid_path='{group.file.attrs['grid_path']}'")
+                                import os
+                                env_grid_dir = os.environ.get("SYNTHESIZER_GRID_DIR")
+                                if env_grid_dir is not None:
+                                    sources_checked.append(f"SYNTHESIZER_GRID_DIR='{env_grid_dir}'")
+                                else:
+                                    sources_checked.append("SYNTHESIZER_GRID_DIR (not set)")
+                                from synthesizer.data.initialise import get_grids_dir
+                                sources_checked.append(f"default grids dir='{get_grids_dir()}'")
+                                
+                                sources_str = ", ".join(sources_checked)
+                                raise FileNotFoundError(
+                                    f"Grid file not found: {grid_name} (checked sources: {sources_str})"
+                                )
                         else:
                             # If no grid path available and grid not in grids, raise error
                             raise FileNotFoundError(
@@ -2274,7 +2348,29 @@ class EmissionModel(Extraction, Generation, Transformation, Combination):
                             except FileNotFoundError:
                                 continue
                         else:
-                            raise FileNotFoundError(f"Grid file not found: {grid_name}")
+                            # More detailed error showing what was checked
+                            sources_checked = []
+                            if grid_path is not None:
+                                sources_checked.append(f"grid_path='{grid_path}'")
+                            if grid_dir is not None:
+                                sources_checked.append(f"grid_dir='{grid_dir}'")
+                            if "grid_path" in group.attrs:
+                                sources_checked.append(f"HDF5 group grid_path='{group.attrs['grid_path']}'")
+                            if "grid_path" in group.file.attrs:
+                                sources_checked.append(f"HDF5 file grid_path='{group.file.attrs['grid_path']}'")
+                            import os
+                            env_grid_dir = os.environ.get("SYNTHESIZER_GRID_DIR")
+                            if env_grid_dir is not None:
+                                sources_checked.append(f"SYNTHESIZER_GRID_DIR='{env_grid_dir}'")
+                            else:
+                                sources_checked.append("SYNTHESIZER_GRID_DIR (not set)")
+                            from synthesizer.data.initialise import get_grids_dir
+                            sources_checked.append(f"default grids dir='{get_grids_dir()}'")
+                            
+                            sources_str = ", ".join(sources_checked)
+                            raise FileNotFoundError(
+                                f"Grid file not found: {grid_name} (checked sources: {sources_str})"
+                            )
                     else:
                         # If no grid path available and grid not in grids
                         raise FileNotFoundError(
