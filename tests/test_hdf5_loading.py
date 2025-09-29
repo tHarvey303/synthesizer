@@ -31,7 +31,7 @@ class TestEmissionModelHDF5:
             label="test_extraction",
             grid=test_grid,
             extract="incident",
-            emitter="stellar"
+            emitter="stellar",
         )
 
         # Save to HDF5
@@ -58,21 +58,19 @@ class TestEmissionModelHDF5:
             label="stellar",
             grid=test_grid,
             extract="incident",
-            emitter="stellar"
+            emitter="stellar",
         )
 
         model2 = EmissionModel(
             label="nebular",
             grid=test_grid,
             extract="nebular",
-            emitter="stellar"
+            emitter="stellar",
         )
 
         # Create combination model
         combo_model = EmissionModel(
-            label="combined",
-            combine=[model1, model2],
-            emitter="stellar"
+            label="combined", combine=[model1, model2], emitter="stellar"
         )
 
         # Save the tree to HDF5
@@ -100,7 +98,7 @@ class TestEmissionModelHDF5:
             emitter="stellar",
             mask_attr="age",
             mask_thresh=100 * Myr,
-            mask_op=">"
+            mask_op=">",
         )
 
         # Save to HDF5
@@ -129,7 +127,7 @@ class TestEmissionModelHDF5:
             extract="incident",
             emitter="stellar",
             tau_v=0.5,
-            fesc=0.1
+            fesc=0.1,
         )
 
         # Save to HDF5
@@ -154,7 +152,7 @@ class TestEmissionModelHDF5:
             extract="incident",
             emitter="stellar",
             per_particle=True,
-            save=False
+            save=False,
         )
 
         with h5py.File(self.test_file, "w") as f:
@@ -169,9 +167,9 @@ class TestEmissionModelHDF5:
         # Verify loaded model matches original
         assert loaded_model.label == "test_model"
         assert loaded_model.emitter == "stellar"
-        assert loaded_model.per_particle == True
-        assert loaded_model.save == False
-        assert loaded_model._is_extracting == True
+        assert loaded_model.per_particle
+        assert not loaded_model.save
+        assert loaded_model._is_extracting
         assert loaded_model.extract == "incident"
 
     def test_from_hdf5_combination_model_basic(self, test_grid):
@@ -181,21 +179,19 @@ class TestEmissionModelHDF5:
             label="model1",
             grid=test_grid,
             extract="incident",
-            emitter="stellar"
+            emitter="stellar",
         )
 
         model2 = EmissionModel(
             label="model2",
             grid=test_grid,
             extract="nebular",
-            emitter="stellar"
+            emitter="stellar",
         )
 
         # Create combination
         combo_model = EmissionModel(
-            label="combo",
-            combine=[model1, model2],
-            emitter="stellar"
+            label="combo", combine=[model1, model2], emitter="stellar"
         )
 
         # Save tree
@@ -203,11 +199,13 @@ class TestEmissionModelHDF5:
 
         # Load back
         grids = {test_grid.grid_name: test_grid}
-        loaded_model = EmissionModel.load_tree_from_hdf5(self.test_file, grids=grids)
+        loaded_model = EmissionModel.load_tree_from_hdf5(
+            self.test_file, grids=grids
+        )
 
         # Verify structure
         assert loaded_model.label == "combo"
-        assert loaded_model._is_combining == True
+        assert loaded_model._is_combining
         assert len(loaded_model.combine) == 2
 
         # Check that child models were reconstructed
@@ -225,9 +223,12 @@ class TestEmissionModelHDF5:
             model_group.attrs["generator"] = "<class 'some.unknown.Generator'>"
             model_group.attrs["emitter"] = "stellar"
 
-        # Try to load - should raise NotImplementedError for unsupported generator
+        # should raise NotImplementedError for unsupported generator
         with h5py.File(self.test_file, "r") as f:
-            with pytest.raises(NotImplementedError, match="Generator reconstruction not implemented"):
+            with pytest.raises(
+                NotImplementedError,
+                match="Generator reconstruction not implemented",
+            ):
                 EmissionModel.from_hdf5(f)
 
     def test_error_on_invalid_model_type(self):
@@ -246,7 +247,7 @@ class TestEmissionModelHDF5:
 
     def test_powerlaw_transformer_save_load(self, test_grid):
         """Test saving and loading models with PowerLaw transformers."""
-        # This test would require the actual PowerLaw class, so we'll mock the structure
+        # This test would require the actual PowerLaw class, so we'll mock it
         with h5py.File(self.test_file, "w") as f:
             # Create base extraction model
             base_group = f.create_group("base")
@@ -260,7 +261,10 @@ class TestEmissionModelHDF5:
             transform_group = f.create_group("attenuated")
             transform_group.attrs["label"] = "attenuated"
             transform_group.attrs["type"] = "transformation"
-            transform_group.attrs["transformer"] = "<class 'synthesizer.emission_models.transformers.dust_attenuation.PowerLaw'>"
+            transform_group.attrs["transformer"] = (
+                "<class 'synthesizer.emission_models"
+                ".transformers.dust_attenuation.PowerLaw'>"
+            )
             transform_group.attrs["transformer_slope"] = -1.5
             transform_group.attrs["apply_to"] = "base"
             transform_group.attrs["emitter"] = "stellar"
@@ -274,13 +278,15 @@ class TestEmissionModelHDF5:
 
     def test_blackbody_generator_save_load(self, test_grid):
         """Test saving and loading models with Blackbody generators."""
-        # This test would require the actual classes, so we'll mock the structure
+        # This test would require the actual classes, so we'll mock it
         with h5py.File(self.test_file, "w") as f:
             # Create generation model
             gen_group = f.create_group("dust_emission")
             gen_group.attrs["label"] = "dust_emission"
             gen_group.attrs["type"] = "generation"
-            gen_group.attrs["generator"] = "<class 'synthesizer.emission_models.dust.emission.Blackbody'>"
+            gen_group.attrs["generator"] = (
+                "<class 'synthesizer.emission_models.dust.emission.Blackbody'>"
+            )
             gen_group.attrs["generator_temperature"] = 20.0
             gen_group.attrs["generator_temperature_units"] = "K"
             gen_group.attrs["generator_cmb_factor"] = 1.0
@@ -294,8 +300,10 @@ class TestEmissionModelHDF5:
             assert gen_group.attrs["generator_temperature_units"] == "K"
             assert gen_group.attrs["generator_cmb_factor"] == 1.0
 
-    def test_incident_emission_model_save_load(self, incident_emission_model, test_grid):
-        """Test saving and loading using the incident_emission_model fixture."""
+    def test_incident_emission_model_save_load(
+        self, incident_emission_model, test_grid
+    ):
+        """Test saving/loading using the incident_emission_model fixture."""
         # Save the model to HDF5
         with h5py.File(self.test_file, "w") as f:
             model_group = f.create_group("incident_model")
@@ -306,9 +314,13 @@ class TestEmissionModelHDF5:
             model_group = f["incident_model"]
             assert model_group.attrs["label"] == incident_emission_model.label
             assert model_group.attrs["type"] == "extraction"
-            assert model_group.attrs["emitter"] == incident_emission_model.emitter
+            assert (
+                model_group.attrs["emitter"] == incident_emission_model.emitter
+            )
 
-    def test_nebular_emission_model_save_load(self, nebular_emission_model, test_grid):
+    def test_nebular_emission_model_save_load(
+        self, nebular_emission_model, test_grid
+    ):
         """Test saving and loading using the nebular_emission_model fixture."""
         # Save the model to HDF5
         with h5py.File(self.test_file, "w") as f:
@@ -319,10 +331,14 @@ class TestEmissionModelHDF5:
         with h5py.File(self.test_file, "r") as f:
             model_group = f["nebular_model"]
             assert model_group.attrs["label"] == nebular_emission_model.label
-            assert model_group.attrs["emitter"] == nebular_emission_model.emitter
+            assert (
+                model_group.attrs["emitter"] == nebular_emission_model.emitter
+            )
 
-    def test_transmitted_emission_model_save_load(self, transmitted_emission_model, test_grid):
-        """Test saving and loading using the transmitted_emission_model fixture."""
+    def test_transmitted_emission_model_save_load(
+        self, transmitted_emission_model, test_grid
+    ):
+        """Test saving/loading using the transmitted_emission_model fixture."""
         # Save the model to HDF5
         with h5py.File(self.test_file, "w") as f:
             model_group = f.create_group("transmitted_model")
@@ -331,11 +347,18 @@ class TestEmissionModelHDF5:
         # Verify the saved structure
         with h5py.File(self.test_file, "r") as f:
             model_group = f["transmitted_model"]
-            assert model_group.attrs["label"] == transmitted_emission_model.label
-            assert model_group.attrs["emitter"] == transmitted_emission_model.emitter
+            assert (
+                model_group.attrs["label"] == transmitted_emission_model.label
+            )
+            assert (
+                model_group.attrs["emitter"]
+                == transmitted_emission_model.emitter
+            )
 
-    def test_reprocessed_emission_model_save_load(self, reprocessed_emission_model, test_grid):
-        """Test saving and loading using the reprocessed_emission_model fixture."""
+    def test_reprocessed_emission_model_save_load(
+        self, reprocessed_emission_model, test_grid
+    ):
+        """Test saving/loading using the reprocessed_emission_model fixture."""
         # Save the model to HDF5
         with h5py.File(self.test_file, "w") as f:
             model_group = f.create_group("reprocessed_model")
@@ -344,16 +367,23 @@ class TestEmissionModelHDF5:
         # Verify the saved structure
         with h5py.File(self.test_file, "r") as f:
             model_group = f["reprocessed_model"]
-            assert model_group.attrs["label"] == reprocessed_emission_model.label
-            assert model_group.attrs["emitter"] == reprocessed_emission_model.emitter
+            assert (
+                model_group.attrs["label"] == reprocessed_emission_model.label
+            )
+            assert (
+                model_group.attrs["emitter"]
+                == reprocessed_emission_model.emitter
+            )
 
-    def test_combination_with_preconfigured_models(self, incident_emission_model, nebular_emission_model, test_grid):
-        """Test saving and loading a combination of preconfigured emission models."""
+    def test_combination_with_preconfigured_models(
+        self, incident_emission_model, nebular_emission_model, test_grid
+    ):
+        """Test saving and loading a combination of preconfigured models."""
         # Create a combination model using the preconfigured fixtures
         combo_model = EmissionModel(
             label="combined_preconfigured",
             combine=[incident_emission_model, nebular_emission_model],
-            emitter="stellar"
+            emitter="stellar",
         )
 
         # Save the tree to HDF5
@@ -368,7 +398,7 @@ class TestEmissionModelHDF5:
             combo_group = f["combined_preconfigured"]
             assert combo_group.attrs["label"] == "combined_preconfigured"
             assert combo_group.attrs["type"] == "combination"
-            # The combine attribute should contain the labels of the child models
+            # The combine attribute should contain the labels of child models
             combine_labels = list(combo_group.attrs["combine"])
             assert incident_emission_model.label in combine_labels
             assert nebular_emission_model.label in combine_labels
@@ -380,18 +410,17 @@ class TestEmissionModelHDF5:
             label="test_model",
             grid=test_grid,
             extract="incident",
-            emitter="stellar"
+            emitter="stellar",
         )
 
         with h5py.File(self.test_file, "w") as f:
             model_group = f.create_group("test_model")
             model.to_hdf5(model_group)
 
-        # Test loading with grid_path (this will likely fail in test environment
-        # since we don't have actual grid files, but tests the code path)
+        # Test loading with grid_path (this will likely fail in test env
         with h5py.File(self.test_file, "r") as f:
             try:
-                loaded_model = EmissionModel.from_hdf5(f, grid_path="/fake/path")
+                EmissionModel.from_hdf5(f, grid_path="/fake/path")
             except FileNotFoundError:
                 # Expected in test environment
                 pass
@@ -403,7 +432,7 @@ class TestEmissionModelHDF5:
             label="test_model",
             grid=test_grid,
             extract="incident",
-            emitter="stellar"
+            emitter="stellar",
         )
 
         with h5py.File(self.test_file, "w") as f:
@@ -413,97 +442,125 @@ class TestEmissionModelHDF5:
         # Try to load without providing the grid
         with h5py.File(self.test_file, "r") as f:
             with pytest.raises(FileNotFoundError):
-                EmissionModel.from_hdf5(f["test_model"], grids={})  # Empty grids dict
+                EmissionModel.from_hdf5(
+                    f["test_model"], grids={}
+                )  # Empty grids dict
 
-    def test_incident_emission_from_hdf5(self, incident_emission_model, test_grid):
+    def test_incident_emission_from_hdf5(
+        self, incident_emission_model, test_grid
+    ):
         """Test that IncidentEmission models can be loaded back correctly."""
         # Save the model
         incident_emission_model.save_tree_to_hdf5(self.test_file)
 
         # Load it back
         grids = {test_grid.grid_name: test_grid}
-        loaded_model = EmissionModel.load_tree_from_hdf5(self.test_file, grids=grids)
+        loaded_model = EmissionModel.load_tree_from_hdf5(
+            self.test_file, grids=grids
+        )
 
         # Verify it's the correct type and has correct properties
         assert loaded_model.label == incident_emission_model.label
         assert loaded_model.emitter == incident_emission_model.emitter
-        assert loaded_model._is_extracting == True
-        # Note: The loaded model might be generic EmissionModel if specialized loading fails
+        assert loaded_model._is_extracting
+        # Note: The loaded model might be generic EmissionModel
         # but it should still have the same functional behavior
 
-    def test_nebular_emission_from_hdf5(self, nebular_emission_model, test_grid):
+    def test_nebular_emission_from_hdf5(
+        self, nebular_emission_model, test_grid
+    ):
         """Test that NebularEmission models can be loaded back correctly."""
         # Save the model
         nebular_emission_model.save_tree_to_hdf5(self.test_file)
 
         # Load it back
         grids = {test_grid.grid_name: test_grid}
-        loaded_model = EmissionModel.load_tree_from_hdf5(self.test_file, grids=grids)
+        loaded_model = EmissionModel.load_tree_from_hdf5(
+            self.test_file, grids=grids
+        )
 
         # Verify basic properties
         assert loaded_model.label == nebular_emission_model.label
         assert loaded_model.emitter == nebular_emission_model.emitter
 
-    def test_transmitted_emission_from_hdf5(self, transmitted_emission_model, test_grid):
-        """Test that TransmittedEmission models can be loaded back correctly."""
+    def test_transmitted_emission_from_hdf5(
+        self, transmitted_emission_model, test_grid
+    ):
+        """Test that TransmittedEmission models can be loaded back."""
         # Save the model
         transmitted_emission_model.save_tree_to_hdf5(self.test_file)
 
         # Load it back
         grids = {test_grid.grid_name: test_grid}
-        loaded_model = EmissionModel.load_tree_from_hdf5(self.test_file, grids=grids)
+        loaded_model = EmissionModel.load_tree_from_hdf5(
+            self.test_file, grids=grids
+        )
 
         # Verify basic properties
         assert loaded_model.label == transmitted_emission_model.label
         assert loaded_model.emitter == transmitted_emission_model.emitter
 
-    def test_reprocessed_emission_from_hdf5(self, reprocessed_emission_model, test_grid):
-        """Test that ReprocessedEmission models can be loaded back correctly."""
+    def test_reprocessed_emission_from_hdf5(
+        self, reprocessed_emission_model, test_grid
+    ):
+        """Test that ReprocessedEmission models can be loaded back."""
         # Save the model
         reprocessed_emission_model.save_tree_to_hdf5(self.test_file)
 
         # Load it back
         grids = {test_grid.grid_name: test_grid}
-        loaded_model = EmissionModel.load_tree_from_hdf5(self.test_file, grids=grids)
+        loaded_model = EmissionModel.load_tree_from_hdf5(
+            self.test_file, grids=grids
+        )
 
         # Verify basic properties
         assert loaded_model.label == reprocessed_emission_model.label
         assert loaded_model.emitter == reprocessed_emission_model.emitter
 
-    def test_intrinsic_emission_from_hdf5(self, intrinsic_emission_model, test_grid):
+    def test_intrinsic_emission_from_hdf5(
+        self, intrinsic_emission_model, test_grid
+    ):
         """Test that IntrinsicEmission models can be loaded back correctly."""
         # Save the model
         intrinsic_emission_model.save_tree_to_hdf5(self.test_file)
 
         # Load it back
         grids = {test_grid.grid_name: test_grid}
-        loaded_model = EmissionModel.load_tree_from_hdf5(self.test_file, grids=grids)
+        loaded_model = EmissionModel.load_tree_from_hdf5(
+            self.test_file, grids=grids
+        )
 
         # Verify basic properties
         assert loaded_model.label == intrinsic_emission_model.label
         assert loaded_model.emitter == intrinsic_emission_model.emitter
 
     def test_pacman_emission_from_hdf5(self, pacman_emission_model, test_grid):
-        """Test that PacmanEmission models can be loaded back correctly."""
+        """Test that PacmanEmission models can be loaded back."""
         # Save the model
         pacman_emission_model.save_tree_to_hdf5(self.test_file)
 
         # Load it back
         grids = {test_grid.grid_name: test_grid}
-        loaded_model = EmissionModel.load_tree_from_hdf5(self.test_file, grids=grids)
+        loaded_model = EmissionModel.load_tree_from_hdf5(
+            self.test_file, grids=grids
+        )
 
         # Verify basic properties
         assert loaded_model.label == pacman_emission_model.label
         assert loaded_model.emitter == pacman_emission_model.emitter
 
-    def test_bimodal_pacman_emission_from_hdf5(self, bimodal_pacman_emission_model, test_grid):
-        """Test that BimodalPacmanEmission models can be loaded back correctly."""
+    def test_bimodal_pacman_emission_from_hdf5(
+        self, bimodal_pacman_emission_model, test_grid
+    ):
+        """Test that BimodalPacmanEmission models can be loaded back."""
         # Save the model
         bimodal_pacman_emission_model.save_tree_to_hdf5(self.test_file)
 
         # Load it back
         grids = {test_grid.grid_name: test_grid}
-        loaded_model = EmissionModel.load_tree_from_hdf5(self.test_file, grids=grids)
+        loaded_model = EmissionModel.load_tree_from_hdf5(
+            self.test_file, grids=grids
+        )
 
         # Verify basic properties
         assert loaded_model.label == bimodal_pacman_emission_model.label
@@ -557,11 +614,11 @@ class TestEmissionModelHDF5:
             label="test_model",
             grid=test_grid,
             extract="incident",
-            emitter="stellar"
+            emitter="stellar",
         )
 
         grid_path = "/path/to/test/grids"
-        
+
         # Save with grid path
         with h5py.File(self.test_file, "w") as f:
             model_group = f.create_group("test_model")
@@ -578,11 +635,11 @@ class TestEmissionModelHDF5:
             label="test_model",
             grid=test_grid,
             extract="incident",
-            emitter="stellar"
+            emitter="stellar",
         )
 
         grid_path = "/path/to/test/grids"
-        
+
         # Save tree with grid path
         model.save_tree_to_hdf5(self.test_file, grid_path=grid_path)
 
@@ -595,21 +652,21 @@ class TestEmissionModelHDF5:
     def test_grid_dir_parameter(self, test_grid):
         """Test that grid_dir parameter works as alias for grid_path."""
         import tempfile
-        import shutil
-        
+
         # Create a temporary directory for testing grid_dir functionality
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Copy the test grid to the temporary directory to actually test loading
+            # Copy the test grid to the temporary directory
             grid_file = f"{temp_dir}/{test_grid.grid_name}.hdf5"
-            # Create a mock grid file (we don't need real grid data for this test)
+            # Create a mock grid file
+            # (we don't need real grid data for this test)
             with open(grid_file, "w") as f:
                 f.write("mock grid file")
-            
+
             model = EmissionModel(
                 label="test_model",
                 grid=test_grid,
                 extract="incident",
-                emitter="stellar"
+                emitter="stellar",
             )
 
             with h5py.File(self.test_file, "w") as f:
@@ -631,38 +688,64 @@ class TestEmissionModelHDF5:
                     assert "grid_dir" in error_msg or temp_dir in error_msg
 
     def test_recursive_model_comparison(self, test_grid):
-        """Test that serialized and deserialized models have identical attributes."""
-        
+        """Test serialized/deserialized models have identical attributes."""
+
         def compare_models_recursively(orig_model, loaded_model, path=""):
             """Recursively compare two emission models and their attributes."""
             # Compare basic attributes
-            assert orig_model.label == loaded_model.label, f"Label mismatch at {path}"
-            assert orig_model.emitter == loaded_model.emitter, f"Emitter mismatch at {path}"
-            assert orig_model.save == loaded_model.save, f"Save flag mismatch at {path}"
-            assert orig_model.per_particle == loaded_model.per_particle, f"Per particle flag mismatch at {path}"
-            
+            assert orig_model.label == loaded_model.label, (
+                f"Label mismatch at {path}"
+            )
+            assert orig_model.emitter == loaded_model.emitter, (
+                f"Emitter mismatch at {path}"
+            )
+            assert orig_model.save == loaded_model.save, (
+                f"Save flag mismatch at {path}"
+            )
+            assert orig_model.per_particle == loaded_model.per_particle, (
+                f"Per particle flag mismatch at {path}"
+            )
+
             # Compare operation types
-            assert orig_model._is_extracting == loaded_model._is_extracting, f"Extraction flag mismatch at {path}"
-            assert orig_model._is_combining == loaded_model._is_combining, f"Combination flag mismatch at {path}"
-            assert orig_model._is_applying == loaded_model._is_applying, f"Transformation flag mismatch at {path}"
-            assert orig_model._is_generating == loaded_model._is_generating, f"Generation flag mismatch at {path}"
-            
+            assert orig_model._is_extracting == loaded_model._is_extracting, (
+                f"Extraction flag mismatch at {path}"
+            )
+            assert orig_model._is_combining == loaded_model._is_combining, (
+                f"Combination flag mismatch at {path}"
+            )
+            assert orig_model._is_applying == loaded_model._is_applying, (
+                f"Transformation flag mismatch at {path}"
+            )
+            assert orig_model._is_generating == loaded_model._is_generating, (
+                f"Generation flag mismatch at {path}"
+            )
+
             # Compare fixed parameters
-            orig_fixed = getattr(orig_model, 'fixed_parameters', {})
-            loaded_fixed = getattr(loaded_model, 'fixed_parameters', {})
-            assert orig_fixed == loaded_fixed, f"Fixed parameters mismatch at {path}"
-            
+            orig_fixed = getattr(orig_model, "fixed_parameters", {})
+            loaded_fixed = getattr(loaded_model, "fixed_parameters", {})
+            assert orig_fixed == loaded_fixed, (
+                f"Fixed parameters mismatch at {path}"
+            )
+
             # Compare masks
-            orig_masks = getattr(orig_model, 'masks', [])
-            loaded_masks = getattr(loaded_model, 'masks', [])
-            assert len(orig_masks) == len(loaded_masks), f"Mask count mismatch at {path}"
-            
+            orig_masks = getattr(orig_model, "masks", [])
+            loaded_masks = getattr(loaded_model, "masks", [])
+            assert len(orig_masks) == len(loaded_masks), (
+                f"Mask count mismatch at {path}"
+            )
+
             # If this is a combination model, compare children
-            if orig_model._is_combining and hasattr(orig_model, 'combine'):
-                assert len(orig_model.combine) == len(loaded_model.combine), f"Child count mismatch at {path}"
-                for i, (orig_child, loaded_child) in enumerate(zip(orig_model.combine, loaded_model.combine)):
-                    compare_models_recursively(orig_child, loaded_child, f"{path}.combine[{i}]")
-        
+            if orig_model._is_combining and hasattr(orig_model, "combine"):
+                assert len(orig_model.combine) == len(loaded_model.combine), (
+                    f"Child count mismatch at {path}"
+                )
+                for i, (orig_child, loaded_child) in enumerate(
+                    zip(orig_model.combine, loaded_model.combine)
+                ):
+                    compare_models_recursively(
+                        orig_child, loaded_child, f"{path}.combine[{i}]"
+                    )
+
         # Create a complex model tree
         model1 = EmissionModel(
             label="model1",
@@ -670,46 +753,45 @@ class TestEmissionModelHDF5:
             extract="incident",
             emitter="stellar",
             tau_v=0.5,
-            save=True
+            save=True,
         )
-        
+
         model2 = EmissionModel(
-            label="model2", 
+            label="model2",
             grid=test_grid,
             extract="nebular",
             emitter="stellar",
-            fesc=0.2
+            fesc=0.2,
         )
-        
+
         # Add a mask to one model
         model1.add_mask("stellar_mass", ">", 1e8)
-        
-        combo_model = EmissionModel(
-            label="combo",
-            combine=(model1, model2)
-        )
-        
+
+        combo_model = EmissionModel(label="combo", combine=(model1, model2))
+
         # Save the tree
         combo_model.save_tree_to_hdf5(self.test_file)
-        
+
         # Load back
         grids = {test_grid.grid_name: test_grid}
-        loaded_combo = EmissionModel.load_tree_from_hdf5(self.test_file, grids=grids)
-        
+        loaded_combo = EmissionModel.load_tree_from_hdf5(
+            self.test_file, grids=grids
+        )
+
         # Compare recursively
         compare_models_recursively(combo_model, loaded_combo)
 
     def test_environment_variable_grid_loading(self, test_grid, monkeypatch):
         """Test that SYNTHESIZER_GRID_DIR environment variable is used."""
         import tempfile
-        
+
         # Create a temporary directory for testing
         with tempfile.TemporaryDirectory() as temp_dir:
             model = EmissionModel(
                 label="test_model",
                 grid=test_grid,
-                extract="incident", 
-                emitter="stellar"
+                extract="incident",
+                emitter="stellar",
             )
 
             with h5py.File(self.test_file, "w") as f:
@@ -718,24 +800,28 @@ class TestEmissionModelHDF5:
 
             # Set environment variable
             monkeypatch.setenv("SYNTHESIZER_GRID_DIR", temp_dir)
-            
-            # Create a mock grid file (we won't actually load it, just test the path resolution)
+
+            # Create a mock grid file (we won't actually load it,
+            # just test the path resolution)
             grid_file = os.path.join(temp_dir, f"{test_grid.grid_name}.hdf5")
             with open(grid_file, "w") as f:
                 f.write("mock grid file")
 
-            # Test loading uses the environment variable (will fail to load actual grid, but path should be resolved)
+            # Test loading uses the environment variable
+            # (will fail to load actual grid, but path should be resolved)
             with h5py.File(self.test_file, "r") as f:
                 try:
                     # This should try to load from the environment path
                     EmissionModel.from_hdf5(f["test_model"], grids={})
-                except Exception as e:
-                    # Should mention the environment variable in error or try to load from temp_dir
-                    # The exact behavior depends on implementation, but it should at least try the env path
+                except Exception:
+                    # Should mention the environment
+                    # variable in error or try to load from temp_dir
+                    # The exact behavior depends on implementation,
+                    # but it should at least try the env path
                     pass
 
     def test_recursive_model_comparison(self, test_grid):
-        """Test deep comparison of model attributes before and after serialization."""
+        """Test deep comparison of model before and after serialization."""
         # Create a complex model with various attributes
         model = EmissionModel(
             label="complex_model",
@@ -745,11 +831,12 @@ class TestEmissionModelHDF5:
             per_particle=True,
             save=False,
             tau_v=0.5,
-            fesc=0.1
+            fesc=0.1,
         )
-        
+
         # Add a mask
         from unyt import Myr
+
         model.add_mask("age", ">", 100 * Myr)
 
         # Save and reload
@@ -768,11 +855,17 @@ class TestEmissionModelHDF5:
         assert loaded_model.save == model.save
         assert loaded_model._is_extracting == model._is_extracting
         assert loaded_model.extract == model.extract
-        
+
         # Compare fixed parameters
-        assert loaded_model.fixed_parameters["tau_v"] == model.fixed_parameters["tau_v"]
-        assert loaded_model.fixed_parameters["fesc"] == model.fixed_parameters["fesc"]
-        
+        assert (
+            loaded_model.fixed_parameters["tau_v"]
+            == model.fixed_parameters["tau_v"]
+        )
+        assert (
+            loaded_model.fixed_parameters["fesc"]
+            == model.fixed_parameters["fesc"]
+        )
+
         # Compare masks
         assert len(loaded_model.masks) == len(model.masks)
         if len(loaded_model.masks) > 0:
@@ -789,37 +882,37 @@ class TestEmissionModelHDF5:
             label="model1",
             grid=test_grid,
             extract="incident",
-            emitter="stellar"
+            emitter="stellar",
         )
-        
+
         model2 = EmissionModel(
-            label="model2", 
+            label="model2",
             grid=test_grid,
             extract="nebular",
-            emitter="stellar"
+            emitter="stellar",
         )
-        
+
         # Create combination model
         combo_model = EmissionModel(
-            label="combo",
-            combine=[model1, model2],
-            emitter="stellar"
+            label="combo", combine=[model1, model2], emitter="stellar"
         )
 
         # Save and reload
         combo_model.save_tree_to_hdf5(self.test_file)
-        
+
         grids = {test_grid.grid_name: test_grid}
-        loaded_combo = EmissionModel.load_tree_from_hdf5(self.test_file, grids=grids)
+        loaded_combo = EmissionModel.load_tree_from_hdf5(
+            self.test_file, grids=grids
+        )
 
         # Compare root model
         assert loaded_combo.label == combo_model.label
         assert loaded_combo.emitter == combo_model.emitter
         assert loaded_combo._is_combining == combo_model._is_combining
-        
+
         # Compare tree structure - both should have same models
         assert len(loaded_combo._models) == len(combo_model._models)
-        
+
         # Verify all child models exist
         for label in combo_model._models:
             assert label in loaded_combo._models
@@ -829,12 +922,12 @@ class TestEmissionModelHDF5:
             assert loaded_child.emitter == orig_child.emitter
 
     def test_grid_loading_error_messages(self, test_grid):
-        """Test that helpful error messages are provided for grid loading failures."""
+        """Test that helpful error messages are provided for grid failures."""
         model = EmissionModel(
             label="test_model",
             grid=test_grid,
             extract="incident",
-            emitter="stellar"
+            emitter="stellar",
         )
 
         with h5py.File(self.test_file, "w") as f:
@@ -845,36 +938,43 @@ class TestEmissionModelHDF5:
         with h5py.File(self.test_file, "r") as f:
             with pytest.raises(FileNotFoundError) as exc_info:
                 EmissionModel.from_hdf5(f["test_model"], grids={})
-            
+
             error_msg = str(exc_info.value)
             # Should mention the various sources it checked
-            assert "grid_path" in error_msg or "SYNTHESIZER_GRID_DIR" in error_msg
+            assert (
+                "grid_path" in error_msg or "SYNTHESIZER_GRID_DIR" in error_msg
+            )
 
     def test_complex_model_with_blackbody_parameters(self, test_grid):
-        """Test complex emission models with Blackbody generators that have parameter issues."""
+        """Test complex emission models with Blackbody generators."""
         try:
             from unyt import kelvin
+
             from synthesizer.emission_models import (
-                AttenuatedEmission,
-                BimodalPacmanEmission,
                 DustEmission,
                 EmissionModel,
-                UnifiedAGN,
             )
-            from synthesizer.emission_models.attenuation import PowerLaw
-            from synthesizer.emission_models.dust.emission import Blackbody, Greybody
+            from synthesizer.emission_models.dust.emission import (
+                Blackbody,
+            )
         except ImportError as e:
-            pytest.skip(f"Required modules not available for complex model test: {e}")
+            pytest.skip(
+                f"Required modules not available for complex model test: {e}"
+            )
 
-        # Test that complex models with Blackbody parameters can be saved and loaded
-        # This tests the case where Blackbody constructor doesn't accept cmb_factor directly
+        # Test that complex models with Blackbody parameters
+        # can be saved and loaded
+        # This tests the case where Blackbody constructor
+        # doesn't accept cmb_factor directly
         try:
-            # Create a model that uses Blackbody with potential parameter conflicts
+            # Create a model that uses Blackbody
+            # with potential parameter conflicts
             model = DustEmission(
                 dust_emission_model=Blackbody(1000 * kelvin),
-                label="test_dust_blackbody"
+                label="test_dust_blackbody",
+                emitter="stellar",
             )
-            
+
             # Save to HDF5
             with h5py.File(self.test_file, "w") as f:
                 model_group = f.create_group("test_model")
@@ -887,15 +987,19 @@ class TestEmissionModelHDF5:
                     loaded_model = EmissionModel.from_hdf5(
                         f["test_model"], grids=grids
                     )
-                    # Should have loaded successfully without parameter conflicts
+                    # Should have loaded successfully without conflicts
                     assert loaded_model.label == "test_dust_blackbody"
                 except Exception as e:
-                    # If the model construction has issues, we at least want to ensure
+                    # If the model construction has issues,
+                    # we at least want to ensure
                     # it doesn't fail due to parameter passing problems
-                    # The error should not be about unsupported arguments to Blackbody
+                    # The error should not be about
+                    # unsupported arguments to Blackbody
                     assert "unexpected keyword argument" not in str(e).lower()
-                    assert "cmb_factor" not in str(e) or "argument" not in str(e)
-                    
+                    assert "cmb_factor" not in str(e) or "argument" not in str(
+                        e
+                    )
+
         except ImportError:
             # If we can't import the required classes, skip this specific test
             pytest.skip("Required emission model classes not available")
