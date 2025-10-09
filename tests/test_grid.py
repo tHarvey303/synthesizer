@@ -3,7 +3,6 @@
 TODO: This needs to actually be implemented with proper useful tests.
 """
 
-import os
 from pathlib import Path
 
 import numpy as np

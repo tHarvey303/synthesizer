@@ -22,7 +22,6 @@ Example usage:
     print(grid.spectra)
 """
 
-import os
 from pathlib import Path
 
 import cmasher as cmr
