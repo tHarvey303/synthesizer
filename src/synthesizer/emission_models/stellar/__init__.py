@@ -13,4 +13,12 @@ STELLAR_MODELS = [
     "PacmanEmission",
     "BimodalPacmanEmission",
     "ScreenEmission",
+    "PacmanEmissionWithEscapedWithDust",
+    "PacmanEmissionWithEscapedNoDust",
+    "PacmanEmissionNoEscapedNoDust",
+    "PacmanEmissionNoEscapedWithDust",
+    "BimodalPacmanEmissionWithEscapedWithDust",
+    "BimodalPacmanEmissionWithEscapedNoDust",
+    "BimodalPacmanEmissionNoEscapedNoDust",
+    "BimodalPacmanEmissionNoEscapedWithDust",
 ]

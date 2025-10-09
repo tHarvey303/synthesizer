@@ -292,9 +292,14 @@ def _generate_image_particle_smoothed(
     # Get the spatial units we'll work with
     spatial_units = img.resolution.units
 
+    print('spatial_units = ', spatial_units)
+
     # Unpack the image properties we need
     fov = img.fov.to_value(spatial_units)
     res = img.resolution.to_value(spatial_units)
+
+    print('res = ', res)
+    print('fov = ', fov)
 
     # Shift the centred coordinates by half the FOV
     # (this is to ensure the image is centered on the emitter)
@@ -475,6 +480,8 @@ def _generate_images_particle_smoothed(
     fov = imgs.fov.to_value(spatial_units)
     res = imgs.resolution.to_value(spatial_units)
 
+    print('c', fov, res, spatial_units, 'd')
+
     # Shift the centred coordinates by half the FOV
     # (this is to ensure the image is centered on the emitter)
     _coords = cent_coords.to(spatial_units).value
@@ -498,6 +505,7 @@ def _generate_images_particle_smoothed(
 
     toc("Setting up smoothed image inputs", start)
 
+    print(_coords)
     # Get the (Nimg, npix_x, npix_y) array of images
     imgs_arr = make_img(
         ensure_array_c_compatible_double(signals),
@@ -675,6 +683,9 @@ def _generate_image_collection_generic(
     from synthesizer.particle import Particles
 
     # Create the image collection
+    print('instrument.resolution = ', instrument.resolution)
+    print('fov = ', fov)
+    
     imgs = ImageCollection(
         resolution=instrument.resolution,
         fov=fov,
@@ -717,6 +728,8 @@ def _generate_image_collection_generic(
             coords, smls = emitter.get_projected_angular_imaging_props(
                 cosmo=cosmo
             )
+            print('coords = ', coords)
+
         elif imgs.has_angular_units:
             raise exceptions.InconsistentArguments(
                 "An Astropy cosmology object must be provided to use angular "

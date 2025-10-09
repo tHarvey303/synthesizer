@@ -9,7 +9,7 @@ import copy
 
 import numpy as np
 from numpy.random import multivariate_normal
-from unyt import Mpc, Msun, km, pc, rad, s
+from unyt import Mpc, Msun, km, pc, rad, s, kpc
 
 from synthesizer import exceptions
 from synthesizer.particle.utils import calculate_smoothing_lengths, rotate
@@ -243,7 +243,11 @@ class Particles:
             # Combine the angular diameter distance with the line of sight
             # distance
             # (along the z-axis)
-            los_dists = ang_diam_dist + cent_coords[:, 2]
+            angular_diameter_distance = cosmo.angular_diameter_distance(self.redshift).to_value('kpc') * kpc
+
+            los_dists = angular_diameter_distance + cent_coords[:, 2]
+
+            
 
             # If we are at redshift 0.0 then we need to shift things to
             # put the closest particle at 10 pc
@@ -380,7 +384,8 @@ class Particles:
         # Get the angular diameter distance
         ang_diam_dist = self.get_angular_diameter_distance(cosmo)
 
-        # Combine the angular diameter distance with the line of sight distance
+        angular_diameter_distance = cosmo.angular_diameter_distance(self.redshift).to_value('kpc') * kpc
+        # Combine the luminosity distance with the line of sight distance
         # (along the z-axis)
         los_dists = ang_diam_dist + cent_coords[:, 2]
 

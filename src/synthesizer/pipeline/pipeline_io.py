@@ -586,6 +586,8 @@ class PipelineIO:
         temp_path = "_".join(path_no_ext.split("_")[:-1]) + "_<rank>.hdf5"
         new_path = "_".join(path_no_ext.split("_")[:-1]) + f".{ext}"
 
+        print('New virtual file will be created at:', new_path)
+
         # Remove the old combined file if it exists
         if os.path.exists(new_path):
             os.remove(new_path)
