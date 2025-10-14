@@ -3,6 +3,8 @@
 TODO: This needs to actually be implemented with proper useful tests.
 """
 
+from pathlib import Path
+
 import numpy as np
 
 from synthesizer.grid import Grid
@@ -68,3 +70,48 @@ class TestSPSGridLines:
             f"{non_unique_cont_lines} found with constant continuum "
             f"values in the grid ({non_unique_cont_vals})"
         )
+
+
+def test_convert_to_bagpipes(test_grid, tmp_path):
+    """Test that the convert_to_bagpipes method creates expected files."""
+    # Create a temporary output directory
+    output_dir = tmp_path / "bagpipes_output"
+
+    # Run the conversion
+    output_files = test_grid.convert_to_bagpipes(
+        output_dir=str(output_dir),
+        logU=-2.0
+    )
+
+    # Check that the output directory was created
+    assert output_dir.exists()
+
+    # Check that the stellar file was created
+    assert "stellar" in output_files
+    stellar_file = Path(output_files["stellar"])
+    assert stellar_file.exists()
+    assert stellar_file.suffix == ".fits"
+
+    # Check that nebular files were created (if grid has lines)
+    if test_grid.reprocessed and test_grid.available_lines:
+        assert "nebular_line" in output_files
+        assert "nebular_cont" in output_files
+        assert "cloudy_lines" in output_files
+        assert "cloudy_linewavs" in output_files
+
+        line_file = Path(output_files["nebular_line"])
+        cont_file = Path(output_files["nebular_cont"])
+        cloudy_lines_file = Path(output_files["cloudy_lines"])
+        cloudy_linewavs_file = Path(output_files["cloudy_linewavs"])
+
+        assert line_file.exists()
+        assert cont_file.exists()
+        assert cloudy_lines_file.exists()
+        assert cloudy_linewavs_file.exists()
+
+        # Check file extensions
+        assert line_file.suffix == ".fits"
+        assert cont_file.suffix == ".fits"
+        assert cloudy_lines_file.suffix == ".txt"
+        assert cloudy_linewavs_file.suffix == ".txt"
+
