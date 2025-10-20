@@ -1808,7 +1808,6 @@ class Grid:
         """
         # Constants
         NEBULAR_AGE_LIMIT_YR = 3e7
-        ZSOL = 0.02
 
         # Create output directory if it doesn't exist
         output_path = Path(output_dir)
@@ -1839,14 +1838,18 @@ class Grid:
 
         # Write stellar FITS file
         stellar_filename = self._write_bagpipes_stellar_fits(
-            base_name, output_path, incident_spectra, live_frac,
-            ages_yr, wavelengths_aa
+            base_name,
+            output_path,
+            incident_spectra,
+            live_frac,
+            ages_yr,
+            wavelengths_aa,
         )
 
         output_files = {"stellar": str(output_path / stellar_filename)}
 
         # Handle nebular emission if available
-        if self.reprocessed and self.available_lines:
+        if self.reprocessed and self.has_lines:
             # Get line collection
             lines = self.get_lines_for_full_grid()
 
@@ -1888,9 +1891,14 @@ class Grid:
 
             # Write nebular FITS files
             line_filename, cont_filename = self._write_bagpipes_nebular_fits(
-                base_name, output_path, logU_values, lines,
-                incident_spec, neb_cont_spec, line_lums,
-                NEBULAR_AGE_LIMIT_YR
+                base_name,
+                output_path,
+                logU_values,
+                lines,
+                incident_spec,
+                neb_cont_spec,
+                line_lums,
+                NEBULAR_AGE_LIMIT_YR,
             )
 
             output_files["nebular_line"] = str(output_path / line_filename)
@@ -1899,8 +1907,13 @@ class Grid:
         return output_files
 
     def _write_bagpipes_stellar_fits(
-        self, grid_name, output_dir, incident_spectra, live_frac,
-        ages_yr, wavelengths_aa
+        self,
+        grid_name,
+        output_dir,
+        incident_spectra,
+        live_frac,
+        ages_yr,
+        wavelengths_aa,
     ):
         """Write stellar SPS grid to Bagpipes FITS format.
 
@@ -1939,28 +1952,24 @@ class Grid:
             spec_data_for_fits = spec_slice.astype("float32")
 
             hdu = fits.ImageHDU(
-                data=spec_data_for_fits,
-                name=f"ZMET_{zmet/ZSOL:.4f}"
+                data=spec_data_for_fits, name=f"ZMET_{zmet / ZSOL:.4f}"
             )
             hdul.append(hdu)
 
         # Add metadata HDUs
         hdul.append(
             fits.ImageHDU(
-                data=live_frac.astype("float32"),
-                name="LIV_MSTAR_FRAC"
+                data=live_frac.astype("float32"), name="LIV_MSTAR_FRAC"
             )
         )
         hdul.append(
             fits.ImageHDU(
-                data=ages_yr.astype("float32"),
-                name="STELLAR_AGE_YR"
+                data=ages_yr.astype("float32"), name="STELLAR_AGE_YR"
             )
         )
         hdul.append(
             fits.ImageHDU(
-                data=wavelengths_aa.astype("float32"),
-                name="WAVELENGTHS_AA"
+                data=wavelengths_aa.astype("float32"), name="WAVELENGTHS_AA"
             )
         )
 
@@ -1971,9 +1980,7 @@ class Grid:
 
         return output_filename
 
-    def _write_bagpipes_cloudy_line_files(
-        self, output_dir, grid_name, lines
-    ):
+    def _write_bagpipes_cloudy_line_files(self, output_dir, grid_name, lines):
         """Write cloudy line metadata files.
 
         Args:
@@ -1992,12 +1999,19 @@ class Grid:
         np.savetxt(
             output_dir / f"{grid_name}_cloudy_linewavs.txt",
             lines.lam.to("Angstrom").value,
-            fmt="%.8e"
+            fmt="%.8e",
         )
 
     def _write_bagpipes_nebular_fits(
-        self, grid_name, output_dir, logU_values, lines, incident_spec,
-        neb_cont_spec, line_lums, nebular_age_limit_yr
+        self,
+        grid_name,
+        output_dir,
+        logU_values,
+        lines,
+        incident_spec,
+        neb_cont_spec,
+        line_lums,
+        nebular_age_limit_yr,
     ):
         """Write nebular emission grids to Bagpipes FITS format.
 
@@ -2045,9 +2059,9 @@ class Grid:
 
         # Normalize each spectrum
         for i_age, age_yr in enumerate(neb_ages_yr):
-            original_age_idx = np.where(
-                self.axes_values["ages"] == age_yr
-            )[0][0]
+            original_age_idx = np.where(self.axes_values["ages"] == age_yr)[0][
+                0
+            ]
 
             for i_z, zmet in enumerate(metallicities):
                 for i_logU, logU_val in enumerate(logU_values):
@@ -2060,8 +2074,7 @@ class Grid:
                     # Calculate ionizing flux
                     ionizing_mask = wav <= 911.8 * angstrom
                     input_ionizing_flux = np.trapz(
-                        incident_ergs_a[ionizing_mask],
-                        x=wav[ionizing_mask]
+                        incident_ergs_a[ionizing_mask], x=wav[ionizing_mask]
                     )
 
                     # Get line and continuum outputs
@@ -2083,19 +2096,23 @@ class Grid:
 
                     if output_ionizing_flux > 0:
                         norm_factor = (
-                            input_ionizing_flux / output_ionizing_flux
-                        ).to("dimensionless").value
+                            (input_ionizing_flux / output_ionizing_flux)
+                            .to("dimensionless")
+                            .value
+                        )
                     else:
                         norm_factor = 0.0
 
                     # Apply normalization
                     final_line_lums_lsun[i_age, i_z, i_logU, :] = (
-                        current_line_lums * norm_factor
-                    ).to("Lsun").value
+                        (current_line_lums * norm_factor).to("Lsun").value
+                    )
 
                     final_cont_flux_lsun_a[i_age, i_z, i_logU, :] = (
-                        neb_cont_ergs_a * norm_factor
-                    ).to("Lsun/Angstrom").value
+                        (neb_cont_ergs_a * norm_factor)
+                        .to("Lsun/Angstrom")
+                        .value
+                    )
 
         # Build FITS files
         hdul_line = fits.HDUList([fits.PrimaryHDU()])
@@ -2113,7 +2130,7 @@ class Grid:
 
                 hdu_line = fits.ImageHDU(
                     hdu_data_line,
-                    name=f"ZMET_{zmet/ZSOL:.4f}ZSOL_LOGU_{logU_val:.2f}"
+                    name=f"ZMET_{zmet / ZSOL:.4f}ZSOL_LOGU_{logU_val:.2f}",
                 )
                 hdul_line.append(hdu_line)
 
@@ -2123,13 +2140,13 @@ class Grid:
                 )
                 hdu_data_cont[0, 1:] = wav.to("Angstrom").value
                 hdu_data_cont[1:, 0] = neb_ages_yr
-                hdu_data_cont[1:, 1:] = (
-                    final_cont_flux_lsun_a[:, i_z, i_logU, :]
-                )
+                hdu_data_cont[1:, 1:] = final_cont_flux_lsun_a[
+                    :, i_z, i_logU, :
+                ]
 
                 hdu_cont = fits.ImageHDU(
                     hdu_data_cont,
-                    name=f"ZMET_{zmet/ZSOL:.4f}ZSOL_LOGU_{logU_val:.2f}"
+                    name=f"ZMET_{zmet / ZSOL:.4f}ZSOL_LOGU_{logU_val:.2f}",
                 )
                 hdul_cont.append(hdu_cont)
 
