@@ -22,11 +22,14 @@ Example usage:
     print(grid.spectra)
 """
 
+from pathlib import Path
+
 import cmasher as cmr
 import h5py
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
+from astropy.io import fits
 from matplotlib import cm
 from matplotlib.animation import FuncAnimation
 from matplotlib.colors import LogNorm
@@ -1781,6 +1784,380 @@ class Grid:
             plt.close(fig)
 
         return anim
+
+    def convert_to_bagpipes(self, output_dir=".", logU=-2.0):
+        """Convert the grid to Bagpipes-compatible FITS files.
+
+        This method converts a Synthesizer grid into the format required by
+        the Bagpipes SED fitting code. It generates FITS files containing
+        stellar spectra, nebular line emission, and nebular continuum emission.
+
+        Args:
+            output_dir (str):
+                Directory where the output files will be saved. Defaults to
+                the current directory.
+            logU (float):
+                The ionisation parameter to use if the grid does not have a
+                logU dimension. Defaults to -2.0.
+
+        Returns:
+            dict:
+                A dictionary containing the paths to the generated files with
+                keys: 'stellar', 'nebular_line', 'nebular_cont',
+                'cloudy_lines', 'cloudy_linewavs'.
+        """
+        # Constants
+        NEBULAR_AGE_LIMIT_YR = 3e7
+
+        # Create output directory if it doesn't exist
+        output_path = Path(output_dir)
+        output_path.mkdir(parents=True, exist_ok=True)
+
+        # Get base grid name
+        base_name = self.grid_name
+
+        # Get wavelengths
+        wavelengths_aa = self.lam.to("Angstrom").value
+        ages_yr = self.axes_values["ages"]
+
+        # Get stellar fraction (if available)
+        try:
+            live_frac = self.stellar_fraction.astype(np.float64)
+        except exceptions.GridError:
+            warn(
+                "No stellar_fraction attribute found in grid; "
+                "assuming all mass is in living stars."
+            )
+            live_frac = np.ones(
+                (len(ages_yr), len(self.axes_values["metallicities"]))
+            )
+
+        # Get incident spectra
+        incident_sed = self.get_sed_for_full_grid("incident")
+        incident_spectra = incident_sed.llam.to("Lsun/Angstrom").value
+
+        # Write stellar FITS file
+        stellar_filename = self._write_bagpipes_stellar_fits(
+            base_name,
+            output_path,
+            incident_spectra,
+            live_frac,
+            ages_yr,
+            wavelengths_aa,
+        )
+
+        output_files = {"stellar": str(output_path / stellar_filename)}
+
+        # Handle nebular emission if available
+        if self.reprocessed and self.has_lines:
+            # Get line collection
+            lines = self.get_lines_for_full_grid()
+
+            # Write cloudy line files
+            self._write_bagpipes_cloudy_line_files(
+                output_path, base_name, lines
+            )
+
+            output_files["cloudy_lines"] = str(
+                output_path / f"{base_name}_cloudy_lines.txt"
+            )
+            output_files["cloudy_linewavs"] = str(
+                output_path / f"{base_name}_cloudy_linewavs.txt"
+            )
+
+            # Get nebular continuum spectra
+            neb_cont_sed = self.get_sed_for_full_grid("nebular_continuum")
+            neb_cont_spec = neb_cont_sed.llam.to("Lsun/Angstrom")
+
+            # Get line luminosities
+            line_lums = lines.luminosity.to("Lsun")
+
+            # Get incident spectra for nebular
+            incident_sed_for_neb = self.get_sed_for_full_grid("incident")
+            incident_spec = incident_sed_for_neb.llam.to("Lsun/Angstrom")
+
+            # Handle logU dimension
+            if "ionisation_parameters" in self.axes:
+                logU_values = np.log10(
+                    self.axes_values["ionisation_parameters"]
+                )
+                # Data already has logU dimension
+            else:
+                logU_values = np.array([logU])
+                # Add logU dimension
+                line_lums = line_lums[:, :, np.newaxis, :]
+                neb_cont_spec = neb_cont_spec[:, :, np.newaxis, :]
+                incident_spec = incident_spec[:, :, np.newaxis, :]
+
+            # Write nebular FITS files
+            line_filename, cont_filename = self._write_bagpipes_nebular_fits(
+                base_name,
+                output_path,
+                logU_values,
+                lines,
+                incident_spec,
+                neb_cont_spec,
+                line_lums,
+                NEBULAR_AGE_LIMIT_YR,
+            )
+
+            output_files["nebular_line"] = str(output_path / line_filename)
+            output_files["nebular_cont"] = str(output_path / cont_filename)
+
+        return output_files
+
+    def _write_bagpipes_stellar_fits(
+        self,
+        grid_name,
+        output_dir,
+        incident_spectra,
+        live_frac,
+        ages_yr,
+        wavelengths_aa,
+    ):
+        """Write stellar SPS grid to Bagpipes FITS format.
+
+        Args:
+            grid_name (str):
+                Name of the grid.
+            output_dir (Path):
+                Output directory path.
+            incident_spectra (np.ndarray):
+                Incident spectra array.
+            live_frac (np.ndarray):
+                Living stellar fraction.
+            ages_yr (np.ndarray):
+                Ages in years.
+            wavelengths_aa (np.ndarray):
+                Wavelengths in Angstroms.
+
+        Returns:
+            str:
+                The filename of the created FITS file.
+        """
+        ZSOL = 0.02
+
+        hdul = fits.HDUList([fits.PrimaryHDU()])
+
+        # Add a spectral grid HDU for each metallicity
+        for i, zmet in enumerate(self.axes_values["metallicities"]):
+            # Slice data for current metallicity
+            spec_slice = incident_spectra[:, i, :]
+
+            # Handle logU dimension if present
+            if "ionisation_parameters" in self.axes:
+                spec_slice = spec_slice[:, 0, :]
+
+            # Convert to required format
+            spec_data_for_fits = spec_slice.astype("float32")
+
+            hdu = fits.ImageHDU(
+                data=spec_data_for_fits, name=f"ZMET_{zmet / ZSOL:.4f}"
+            )
+            hdul.append(hdu)
+
+        # Add metadata HDUs
+        hdul.append(
+            fits.ImageHDU(
+                data=live_frac.astype("float32"), name="LIV_MSTAR_FRAC"
+            )
+        )
+        hdul.append(
+            fits.ImageHDU(
+                data=ages_yr.astype("float32"), name="STELLAR_AGE_YR"
+            )
+        )
+        hdul.append(
+            fits.ImageHDU(
+                data=wavelengths_aa.astype("float32"), name="WAVELENGTHS_AA"
+            )
+        )
+
+        output_filename = f"{grid_name}_stellar_grids.fits"
+        output_path = output_dir / output_filename
+        hdul.writeto(output_path, overwrite=True)
+        hdul.close()
+
+        return output_filename
+
+    def _write_bagpipes_cloudy_line_files(self, output_dir, grid_name, lines):
+        """Write cloudy line metadata files.
+
+        Args:
+            output_dir (Path):
+                Output directory path.
+            grid_name (str):
+                Name of the grid.
+            lines (LineCollection):
+                Line collection object.
+        """
+        # Write line IDs
+        with open(output_dir / f"{grid_name}_cloudy_lines.txt", "w") as f:
+            f.write("\n".join(self.available_lines))
+
+        # Write line wavelengths
+        np.savetxt(
+            output_dir / f"{grid_name}_cloudy_linewavs.txt",
+            lines.lam.to("Angstrom").value,
+            fmt="%.8e",
+        )
+
+    def _write_bagpipes_nebular_fits(
+        self,
+        grid_name,
+        output_dir,
+        logU_values,
+        lines,
+        incident_spec,
+        neb_cont_spec,
+        line_lums,
+        nebular_age_limit_yr,
+    ):
+        """Write nebular emission grids to Bagpipes FITS format.
+
+        Args:
+            grid_name (str):
+                Name of the grid.
+            output_dir (Path):
+                Output directory path.
+            logU_values (np.ndarray):
+                Log ionisation parameters.
+            lines (LineCollection):
+                Line collection object.
+            incident_spec (unyt_array):
+                Incident spectra.
+            neb_cont_spec (unyt_array):
+                Nebular continuum spectra.
+            line_lums (unyt_array):
+                Line luminosities.
+            nebular_age_limit_yr (float):
+                Age limit for nebular emission.
+
+        Returns:
+            tuple:
+                Filenames for line and continuum FITS files.
+        """
+        ZSOL = 0.02
+
+        line_wavs = lines.lam
+        wav = self.lam
+
+        # Get ages within nebular limit
+        age_mask = self.axes_values["ages"] < nebular_age_limit_yr
+        neb_ages_yr = self.axes_values["ages"][age_mask]
+        metallicities = self.axes_values["metallicities"]
+
+        n_neb_ages = len(neb_ages_yr)
+        n_z = len(metallicities)
+        n_logU = len(logU_values)
+        n_lines = len(line_wavs)
+        n_wavs = len(wav)
+
+        # Initialize output arrays
+        final_line_lums_lsun = np.zeros((n_neb_ages, n_z, n_logU, n_lines))
+        final_cont_flux_lsun_a = np.zeros((n_neb_ages, n_z, n_logU, n_wavs))
+
+        # Normalize each spectrum
+        for i_age, age_yr in enumerate(neb_ages_yr):
+            original_age_idx = np.where(self.axes_values["ages"] == age_yr)[0][
+                0
+            ]
+
+            for i_z, zmet in enumerate(metallicities):
+                for i_logU, logU_val in enumerate(logU_values):
+                    # Get incident spectrum
+                    incident_spec_slice = incident_spec[
+                        original_age_idx, i_z, i_logU, :
+                    ]
+                    incident_ergs_a = incident_spec_slice.to("erg/s/Angstrom")
+
+                    # Calculate ionizing flux
+                    ionizing_mask = wav <= 911.8 * angstrom
+                    input_ionizing_flux = np.trapz(
+                        incident_ergs_a[ionizing_mask], x=wav[ionizing_mask]
+                    )
+
+                    # Get line and continuum outputs
+                    current_line_lums = line_lums[
+                        original_age_idx, i_z, i_logU, :
+                    ]
+                    total_line_output = np.sum(current_line_lums)
+
+                    neb_cont_slice = neb_cont_spec[
+                        original_age_idx, i_z, i_logU, :
+                    ]
+                    neb_cont_ergs_a = neb_cont_slice.to("erg/s/Angstrom")
+                    total_cont_output = np.trapz(neb_cont_ergs_a, x=wav)
+
+                    # Calculate normalization factor
+                    output_ionizing_flux = (
+                        total_line_output + total_cont_output
+                    )
+
+                    if output_ionizing_flux > 0:
+                        norm_factor = (
+                            (input_ionizing_flux / output_ionizing_flux)
+                            .to("dimensionless")
+                            .value
+                        )
+                    else:
+                        norm_factor = 0.0
+
+                    # Apply normalization
+                    final_line_lums_lsun[i_age, i_z, i_logU, :] = (
+                        (current_line_lums * norm_factor).to("Lsun").value
+                    )
+
+                    final_cont_flux_lsun_a[i_age, i_z, i_logU, :] = (
+                        (neb_cont_ergs_a * norm_factor)
+                        .to("Lsun/Angstrom")
+                        .value
+                    )
+
+        # Build FITS files
+        hdul_line = fits.HDUList([fits.PrimaryHDU()])
+        hdul_cont = fits.HDUList([fits.PrimaryHDU()])
+
+        for i_z, zmet in enumerate(metallicities):
+            for i_logU, logU_val in enumerate(logU_values):
+                # Create line FITS HDU
+                hdu_data_line = np.full(
+                    (n_neb_ages + 1, n_lines + 1), 0, dtype="float32"
+                )
+                hdu_data_line[0, 1:] = line_wavs.to("Angstrom").value
+                hdu_data_line[1:, 0] = neb_ages_yr
+                hdu_data_line[1:, 1:] = final_line_lums_lsun[:, i_z, i_logU, :]
+
+                hdu_line = fits.ImageHDU(
+                    hdu_data_line,
+                    name=f"ZMET_{zmet / ZSOL:.4f}ZSOL_LOGU_{logU_val:.2f}",
+                )
+                hdul_line.append(hdu_line)
+
+                # Create continuum FITS HDU
+                hdu_data_cont = np.full(
+                    (n_neb_ages + 1, n_wavs + 1), 0, dtype="float32"
+                )
+                hdu_data_cont[0, 1:] = wav.to("Angstrom").value
+                hdu_data_cont[1:, 0] = neb_ages_yr
+                hdu_data_cont[1:, 1:] = final_cont_flux_lsun_a[
+                    :, i_z, i_logU, :
+                ]
+
+                hdu_cont = fits.ImageHDU(
+                    hdu_data_cont,
+                    name=f"ZMET_{zmet / ZSOL:.4f}ZSOL_LOGU_{logU_val:.2f}",
+                )
+                hdul_cont.append(hdu_cont)
+
+        # Save files
+        line_filename = f"{grid_name}_nebular_line_grids.fits"
+        hdul_line.writeto(output_dir / line_filename, overwrite=True)
+
+        cont_filename = f"{grid_name}_nebular_cont_grids.fits"
+        hdul_cont.writeto(output_dir / cont_filename, overwrite=True)
+
+        return line_filename, cont_filename
 
 
 class Template:
