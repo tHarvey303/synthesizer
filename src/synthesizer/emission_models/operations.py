@@ -612,8 +612,23 @@ class Generation:
         # Flag it's generation
         group.attrs["type"] = "generation"
 
-        # Save the generator
-        group.attrs["generator"] = str(type(self._generator))
+        # Save the generator type and parameters
+        generator_type = str(type(self._generator))
+        group.attrs["generator"] = generator_type
+
+        # Save generator-specific parameters
+        if hasattr(self._generator, 'temperature'):
+            if self._generator.temperature is not None:
+                group.attrs["generator_temperature"] = float(
+                    self._generator.temperature.value
+                )
+                group.attrs["generator_temperature_units"] = str(
+                    self._generator.temperature.units
+                )
+        if hasattr(self._generator, 'emissivity'):
+            group.attrs["generator_emissivity"] = self._generator.emissivity
+        if hasattr(self._generator, 'cmb_factor'):
+            group.attrs["generator_cmb_factor"] = self._generator.cmb_factor
 
         # Save the energy balance models if they exist
         if (
@@ -787,8 +802,46 @@ class Transformation:
         # Flag it's dust attenuation
         group.attrs["type"] = "transformation"
 
-        # Save the dust curve
-        group.attrs["transformer"] = str(type(self._transformer))
+        # Save the dust curve type and parameters
+        transformer_type = str(type(self._transformer))
+        group.attrs["transformer"] = transformer_type
+
+        # Save transformer-specific parameters
+        if hasattr(self._transformer, 'slope'):
+            group.attrs["transformer_slope"] = self._transformer.slope
+        if hasattr(self._transformer, 'emissivity'):
+            group.attrs["transformer_emissivity"] = (
+                self._transformer.emissivity
+            )
+        if hasattr(self._transformer, 'temperature'):
+            if self._transformer.temperature is not None:
+                group.attrs["transformer_temperature"] = float(
+                    self._transformer.temperature.value
+                )
+                group.attrs["transformer_temperature_units"] = str(
+                    self._transformer.temperature.units
+                )
+
+        # Save escape fraction transformer parameters
+        if hasattr(self._transformer, '_required_params'):
+            # For EscapedFraction, ProcessedFraction - these have fesc_attrs
+            if any(cls_name in transformer_type for cls_name in [
+                'EscapedFraction', 'ProcessedFraction'
+            ]):
+                group.attrs["transformer_fesc_attrs"] = list(
+                    self._transformer._required_params
+                )
+            # For CoveringFraction, EscapingFraction - these have covering_attrs
+            elif any(cls_name in transformer_type for cls_name in [
+                'CoveringFraction', 'EscapingFraction'
+            ]):
+                group.attrs["transformer_covering_attrs"] = list(
+                    self._transformer._required_params
+                )
+
+        # Save IGM transformer parameters
+        if hasattr(self._transformer, 'redshift'):
+            group.attrs["transformer_redshift"] = self._transformer.redshift
 
         # Save the model to apply the dust curve to
         group.attrs["apply_to"] = self._apply_to_label
